@@ -48,6 +48,7 @@ def parse_actual_goods():
     """Парсим товары перебором по его id. Если товар существует, добавляем ссылку на него в текстовый файл"""
     actual_catalog_list = ActualCatalog().get_catalog_status(from_number=3000, to_number=3010)
     WriteFile(values=actual_catalog_list).write_txt_file_catalog_status()
+    print()
 
 
 def main():
