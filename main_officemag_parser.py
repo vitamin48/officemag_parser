@@ -160,6 +160,14 @@ class ParseDiscontProduct:
         df.insert(6, 'Ссылка на изображение', src_img_list)
         XLS().create_from_one_df(df, 'Товары со скидками', 'res_parse')
 
+        name_list.clear()
+        url_list.clear()
+        src_img_list.clear()
+        price_old_list.clear()
+        price_discont_list.clear()
+        krasnoarmeyskaya_list.clear()
+        sovetskaya_list.clear()
+
 
 class ParseEachProduct:
     def __init__(self):
@@ -175,9 +183,10 @@ class ParseEachProduct:
         description_list = []  # описание
         features_colour_list = []  # цвет
         features_package_weight_list = []  # вес в упаковке
+        features_package_length_list = []  # Длина упаковки
         features_packing_width_list = []  # ширина в упаковке
         features_packing_height_list = []  # Высота упаковки
-        features_package_length_list = []  # Длина упаковки
+
         features_manufacturer_list = []  # Производитель
         url_add_list = []  # дополнительные ссылки на товар из карточки
         price_discont_list = []  # цена с учетом скидки
@@ -185,27 +194,102 @@ class ParseEachProduct:
         sovetskaya_list = []
 
         url_list = df['URL'].tolist()
-        code = url_list[0][1:]
-        soup = self.get_soup(code=code)
-        tabscontent = soup.find('div', class_='tabsContent js-tabsContent js-tabsContentMobile')  # общая таблица внизу
-        description = tabscontent.find('div', class_='infoDescription').text.replace('\nОписание\n\n', '')
-        features = tabscontent.find('ul', class_='infoFeatures')  # общий раздел характеристики
-        li_set = features.find_all('li')
-        l = len(li_set)
-        for i in li_set:
-            print(i.text)
-            if any('Цвет — ' in s for s in li_set):
+        fr = 0
+        to = 20
+        for u in range(fr, to):
+            # for u in range(len(url_list)):
+            code = url_list[u][1:]
+            soup = self.get_soup(code=code)
+            price = float(soup.find('span', class_='Price Price--best').find('span', class_='Price__count').text + '.' + \
+                          soup.find('span', class_='Price Price--best').find('span', class_='Price__penny').text)
+            price_discont_list.append(price)
+            url = [soup.find('ul', class_='ProductPhotoThumbs').find('li', class_='ProductPhotoThumb active').
+                   find('a', href=True)['href']]
+            surl = soup.find('ul', class_='ProductPhotoThumbs').findAll('li', class_='ProductPhotoThumb')
+            for su in surl:
+                url.append(su.find('a', href=True)['href'])
+            url_add_list.append(url)
+            tabscontent = soup.find('div',
+                                    class_='tabsContent js-tabsContent js-tabsContentMobile')  # общая таблица внизу
+            description = tabscontent.find('div', class_='infoDescription').text.replace('\nОписание\n\n', '')
+            description_list.append(description)
+            shops = tabscontent.find('div', class_='tabsContent__item pickup'). \
+                find('table', class_='AvailabilityList AvailabilityList--dotted'). \
+                findAll('td', 'AvailabilityBox')
+            krasnoarmeyskaya = shops[1].text
+            if 'Под заказ' in krasnoarmeyskaya:
+                krasnoarmeyskaya = 0
+            else:
+                krasnoarmeyskaya = int(krasnoarmeyskaya.replace('шт', '').replace(' ', '').replace('.', ''))
+            sovetskaya = shops[3].text
+            if 'Под заказ' in sovetskaya:
+                sovetskaya = 0
+            else:
+                sovetskaya = int(sovetskaya.replace('шт', '').replace(' ', '').replace('.', ''))
+            krasnoarmeyskaya_list.append(krasnoarmeyskaya)
+            sovetskaya_list.append(sovetskaya)
+            print()
+
+            features = tabscontent.find('ul', class_='infoFeatures')  # общий раздел характеристики
+            li_set = features.find_all('li')
+            l = len(li_set)
+            find_colour = False
+            for i in li_set:
+                print(i.text)
                 if 'Цвет — ' in i.text:
                     features_colour_list.append(i.text.replace('Цвет — ', '')[:-1])
-            else:
-                features_colour_list.append(0)
-            # if any('Размер' in s for s in li_set):
-            #     print()
-            # if any('Производитель' in s for s in li_set):
-            #     if 'Вес' in i.text:
-            #         features_package_weight_list.append(i.text.replace('\n', '').replace(' ', '').replace('—', ''))
+                    find_colour = True
+                # if any('Цвет — ' in s for s in li_set):
+                #     if 'Цвет — ' in i.text:
+                #         features_colour_list.append(i.text.replace('Цвет — ', '')[:-1])
+                # else:
+                #     features_colour_list.append('-')
+                if 'Вес' in i.text:
+                    weight = i.text.replace('Вес с упаковкой', '').replace('\n', '').replace(' ', '').replace('—', '')
+                    if 'кг' in weight:
+                        weight = int((float(weight.replace('кг', '').replace(',', '.')) * 1000))
+                    else:
+                        weight = int(weight.replace('г', ''))
+                    features_package_weight_list.append(weight)
+                elif 'Размер в упаковке' in i.text:
+                    string = i.text.replace('Размер в упаковке', '').replace('\n', '').replace('—', '').replace(' ', '')
+                    if 'см' in string:
+                        string = string.replace('см', '')
+                        length = int(float(string.split('x')[0]) * 10)
+                        width = int(float(string.split('x')[1]) * 10)
+                        height = int(float(string.split('x')[2]) * 10)
+                        features_package_length_list.append(length)
+                        features_packing_width_list.append(width)
+                        features_packing_height_list.append(height)
+                    else:
+                        print(f'Ошибка: в строке \n\n{i.text}\n\nв разделе размер нет см')
+                elif 'Производитель — ' in i.text:
+                    manufacturer = i.text.replace('Производитель — ', '').replace(' ', '').replace('\n', '')
+                    features_manufacturer_list.append(manufacturer)
+                print()
+            if not find_colour:
+                features_colour_list.append('-')
+            time.sleep(3)
+            print()
 
-        print()
+        df_each_product = pd.DataFrame()
+        df_each_product.insert(0, 'Code', url_list[fr:to])
+        df_each_product.insert(1, 'Название', df['Название'].to_list()[fr:to])
+        df_each_product.insert(2, 'Цена со скидкой', price_discont_list)
+        df_each_product.insert(3, 'Актуальный остаток на Советской', sovetskaya_list)
+        df_each_product.insert(4, 'Предыдущий остаток на Советской', df['Остаток на Советской'].to_list()[fr:to])
+        df_each_product.insert(5, 'Актуальный остаток на Красноармейской', krasnoarmeyskaya_list)
+        df_each_product.insert(6, 'Предыдущий остаток на Красноармейской',
+                               df['Остаток на Красноармейской'].to_list()[fr:to])
+        df_each_product.insert(7, 'Описание', description_list)
+        df_each_product.insert(8, 'Цвет', features_colour_list)
+        df_each_product.insert(9, 'Вес в упаковке', features_package_weight_list)
+        df_each_product.insert(10, 'Длина упаковки', features_package_length_list)
+        df_each_product.insert(11, 'Ширина в упаковке', features_packing_width_list)
+        df_each_product.insert(12, 'Высота упаковки', features_packing_height_list)
+        df_each_product.insert(13, 'Производитель', features_manufacturer_list)
+        df_each_product.insert(14, 'Ссылки на фото товара', url_add_list)
+        XLS().create_from_one_df(df_each_product, 'Товары', 'res_parse_product')
 
 
 class XLS:
