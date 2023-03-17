@@ -175,9 +175,12 @@ class ParseEachProduct:
         self.__main_url = 'https://www.officemag.ru/'
 
     def get_soup(self, code):
-        r = uReq(f'{self.__main_url}{code}')  # новый синтаксический анализатор
-        soup = BeautifulSoup(r.read(), 'lxml')
-        return soup
+        r = uReq(f'{self.__main_url}{code}')
+        if r.code == 200:  # новый синтаксический анализатор
+            soup = BeautifulSoup(r.read(), 'lxml')
+            return soup
+        else:
+            print(f'Ошибка: {r.code}:\ncode={code}')
 
     def get_attr_each_product(self, df):
         description_list = []  # описание
@@ -194,21 +197,29 @@ class ParseEachProduct:
         sovetskaya_list = []
 
         url_list = df['URL'].tolist()
-        fr = 0
-        to = 20
-        for u in range(fr, to):
+        fr = 76
+        to = 100
+        for u in range(76, 100):
             # for u in range(len(url_list)):
             code = url_list[u][1:]
+            print(f'code ======{code}')
             soup = self.get_soup(code=code)
-            price = float(soup.find('span', class_='Price Price--best').find('span', class_='Price__count').text + '.' + \
-                          soup.find('span', class_='Price Price--best').find('span', class_='Price__penny').text)
+            price = float((soup.find('span', class_='Price Price--best').find('span', class_='Price__count').text +
+                           '.' + soup.find('span', class_='Price Price--best').
+                           find('span', class_='Price__penny').text).replace(' ', '').replace(u'\xa0', ''))
             price_discont_list.append(price)
-            url = [soup.find('ul', class_='ProductPhotoThumbs').find('li', class_='ProductPhotoThumb active').
-                   find('a', href=True)['href']]
-            surl = soup.find('ul', class_='ProductPhotoThumbs').findAll('li', class_='ProductPhotoThumb')
-            for su in surl:
-                url.append(su.find('a', href=True)['href'])
-            url_add_list.append(url)
+            check_count_url_img = soup.find('ul', class_='ProductPhotoThumbs')
+            if check_count_url_img:
+                url = [soup.find('ul', class_='ProductPhotoThumbs').find('li', class_='ProductPhotoThumb active').
+                       find('a', href=True)['href']]
+                surl = soup.find('ul', class_='ProductPhotoThumbs').findAll('li', class_='ProductPhotoThumb')
+                for su in surl:
+                    url.append(su.find('a', href=True)['href'])
+                url_str = ' '.join(url)
+                url_add_list.append(url_str)
+            elif check_count_url_img is None:
+                url_from_main_parse = df['Ссылка на изображение'].to_list()[u]
+                url_add_list.append(url_from_main_parse)
             tabscontent = soup.find('div',
                                     class_='tabsContent js-tabsContent js-tabsContentMobile')  # общая таблица внизу
             description = tabscontent.find('div', class_='infoDescription').text.replace('\nОписание\n\n', '')
@@ -217,12 +228,16 @@ class ParseEachProduct:
                 find('table', class_='AvailabilityList AvailabilityList--dotted'). \
                 findAll('td', 'AvailabilityBox')
             krasnoarmeyskaya = shops[1].text
-            if 'Под заказ' in krasnoarmeyskaya:
+            if 'заказ' in krasnoarmeyskaya:
+                krasnoarmeyskaya = 0
+            elif 'Поступит' in krasnoarmeyskaya:
                 krasnoarmeyskaya = 0
             else:
                 krasnoarmeyskaya = int(krasnoarmeyskaya.replace('шт', '').replace(' ', '').replace('.', ''))
             sovetskaya = shops[3].text
-            if 'Под заказ' in sovetskaya:
+            if 'заказ' in sovetskaya:
+                sovetskaya = 0
+            elif 'Поступит' in sovetskaya:
                 sovetskaya = 0
             else:
                 sovetskaya = int(sovetskaya.replace('шт', '').replace(' ', '').replace('.', ''))
@@ -244,13 +259,14 @@ class ParseEachProduct:
                 #         features_colour_list.append(i.text.replace('Цвет — ', '')[:-1])
                 # else:
                 #     features_colour_list.append('-')
-                if 'Вес' in i.text:
+                if 'Вес с упаковкой' in i.text:
                     weight = i.text.replace('Вес с упаковкой', '').replace('\n', '').replace(' ', '').replace('—', '')
                     if 'кг' in weight:
                         weight = int((float(weight.replace('кг', '').replace(',', '.')) * 1000))
+                        features_package_weight_list.append(weight)
                     else:
                         weight = int(weight.replace('г', ''))
-                    features_package_weight_list.append(weight)
+                        features_package_weight_list.append(weight)
                 elif 'Размер в упаковке' in i.text:
                     string = i.text.replace('Размер в упаковке', '').replace('\n', '').replace('—', '').replace(' ', '')
                     if 'см' in string:
@@ -269,7 +285,7 @@ class ParseEachProduct:
                 print()
             if not find_colour:
                 features_colour_list.append('-')
-            time.sleep(3)
+            time.sleep(2)
             print()
 
         df_each_product = pd.DataFrame()
@@ -283,10 +299,10 @@ class ParseEachProduct:
                                df['Остаток на Красноармейской'].to_list()[fr:to])
         df_each_product.insert(7, 'Описание', description_list)
         df_each_product.insert(8, 'Цвет', features_colour_list)
-        df_each_product.insert(9, 'Вес в упаковке', features_package_weight_list)
-        df_each_product.insert(10, 'Длина упаковки', features_package_length_list)
-        df_each_product.insert(11, 'Ширина в упаковке', features_packing_width_list)
-        df_each_product.insert(12, 'Высота упаковки', features_packing_height_list)
+        df_each_product.insert(9, 'Вес в упаковке (г)', features_package_weight_list)
+        df_each_product.insert(10, 'Длина упаковки (мм)', features_package_length_list)
+        df_each_product.insert(11, 'Ширина в упаковке (мм)', features_packing_width_list)
+        df_each_product.insert(12, 'Высота упаковки (мм)', features_packing_height_list)
         df_each_product.insert(13, 'Производитель', features_manufacturer_list)
         df_each_product.insert(14, 'Ссылки на фото товара', url_add_list)
         XLS().create_from_one_df(df_each_product, 'Товары', 'res_parse_product')
@@ -300,14 +316,16 @@ class XLS:
     def create_from_one_df(self, df, sheet, file_name):
         """Создание файла excel из 1-го DataFrame"""
         path = f'{self.save_path}\\{file_name}.xlsx'
-        writer = pd.ExcelWriter(path)
+        writer = pd.ExcelWriter(path, engine_kwargs={'options': {'strings_to_urls': False}})
         df.to_excel(writer, sheet_name=sheet, index=False, na_rep='NaN', engine='openpyxl')
         # Auto-adjust columns' width
         for column in df:
             column_width = max(df[column].astype(str).map(len).max(), len(column)) + 2
             col_idx = df.columns.get_loc(column)
             writer.sheets[f'{sheet}'].set_column(col_idx, col_idx, column_width)
-
+        writer.sheets[sheet].set_column(1, 1, 30)
+        writer.sheets[sheet].set_column(7, 7, 30)
+        writer.sheets[sheet].set_column(14, 14, 30)
         writer.close()
         return path
 
