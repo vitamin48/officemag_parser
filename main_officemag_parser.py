@@ -199,7 +199,7 @@ class ParseEachProduct:
         url_list = df['URL'].tolist()
         fr = 76
         to = 100
-        for u in range(76, 100):
+        for u in range(len(url_list)):
             # for u in range(len(url_list)):
             code = url_list[u][1:]
             print(f'code ======{code}')
@@ -285,18 +285,18 @@ class ParseEachProduct:
                 print()
             if not find_colour:
                 features_colour_list.append('-')
-            time.sleep(2)
+            time.sleep(3)
             print()
 
         df_each_product = pd.DataFrame()
-        df_each_product.insert(0, 'Code', url_list[fr:to])
-        df_each_product.insert(1, 'Название', df['Название'].to_list()[fr:to])
+        df_each_product.insert(0, 'Code', url_list)
+        df_each_product.insert(1, 'Название', df['Название'].to_list())
         df_each_product.insert(2, 'Цена со скидкой', price_discont_list)
         df_each_product.insert(3, 'Актуальный остаток на Советской', sovetskaya_list)
-        df_each_product.insert(4, 'Предыдущий остаток на Советской', df['Остаток на Советской'].to_list()[fr:to])
+        df_each_product.insert(4, 'Предыдущий остаток на Советской', df['Остаток на Советской'].to_list())
         df_each_product.insert(5, 'Актуальный остаток на Красноармейской', krasnoarmeyskaya_list)
         df_each_product.insert(6, 'Предыдущий остаток на Красноармейской',
-                               df['Остаток на Красноармейской'].to_list()[fr:to])
+                               df['Остаток на Красноармейской'].to_list())
         df_each_product.insert(7, 'Описание', description_list)
         df_each_product.insert(8, 'Цвет', features_colour_list)
         df_each_product.insert(9, 'Вес в упаковке (г)', features_package_weight_list)
