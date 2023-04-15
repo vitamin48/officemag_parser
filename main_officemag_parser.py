@@ -191,7 +191,9 @@ class ParseEachProduct:
         features_packing_height_list = []  # Высота упаковки
 
         features_manufacturer_list = []  # Производитель
-        url_add_list = []  # дополнительные ссылки на товар из карточки
+        url_main_img_add_list = []  # основное фото товара
+        url_img_add_list = []  # дополнительные ссылки на товар из карточки
+        video_lst = []  # видео товара
         price_discont_list = []  # цена с учетом скидки
         krasnoarmeyskaya_list = []
         sovetskaya_list = []
@@ -204,22 +206,43 @@ class ParseEachProduct:
             code = url_list[u][1:]
             print(f'code ======{code}')
             soup = self.get_soup(code=code)
-            price = float((soup.find('span', class_='Price Price--best').find('span', class_='Price__count').text +
-                           '.' + soup.find('span', class_='Price Price--best').
-                           find('span', class_='Price__penny').text).replace(' ', '').replace(u'\xa0', ''))
-            price_discont_list.append(price)
+            if soup.find('span', class_='Price Price--best'):
+                price = float((soup.find('span', class_='Price Price--best').find('span', class_='Price__count').text +
+                               '.' + soup.find('span', class_='Price Price--best').
+                               find('span', class_='Price__penny').text).replace(' ', '').replace(u'\xa0', ''))
+                price_discont_list.append(price)
+            else:
+                price = float(soup.find('span', class_='Price__count').text + '.'
+                              + soup.find('span', class_='Price__penny').text)
+                price_discont_list.append(price)
+                print(f'Товар: {code} без зачеркнутой цены')
+
             check_count_url_img = soup.find('ul', class_='ProductPhotoThumbs')
             if check_count_url_img:
-                url = [soup.find('ul', class_='ProductPhotoThumbs').find('li', class_='ProductPhotoThumb active').
-                       find('a', href=True)['href']]
+                url = []
+                main_url = [soup.find('ul', class_='ProductPhotoThumbs').find('li', class_='ProductPhotoThumb active').
+                            find('a', href=True)['href']]
                 surl = soup.find('ul', class_='ProductPhotoThumbs').findAll('li', class_='ProductPhotoThumb')
+                video_present = False
                 for su in surl:
-                    url.append(su.find('a', href=True)['href'])
-                url_str = ' '.join(url)
-                url_add_list.append(url_str)
+                    url_img = su.find('a', href=True)['href']
+                    if 'https://img.youtube.com/' in url_img:
+                        youtube_url = soup.find('input', class_='js-productVideoID').attrs.get('value')
+                        video_lst.append(youtube_url)
+                        video_present = True
+                        print()
+                    else:
+                        url.append(url_img)
+                if video_present is False:
+                    video_lst.append('-')
+                    video_present = True
+                url_str = ' '.join(url[1:17])
+                url_img_add_list.append(url_str)
+                main_url_str = ''.join(main_url)
+                url_main_img_add_list.append(main_url_str)
             elif check_count_url_img is None:
                 url_from_main_parse = df['Ссылка на изображение'].to_list()[u]
-                url_add_list.append(url_from_main_parse)
+                url_img_add_list.append(url_from_main_parse)
             tabscontent = soup.find('div',
                                     class_='tabsContent js-tabsContent js-tabsContentMobile')  # общая таблица внизу
             description = tabscontent.find('div', class_='infoDescription').text.replace('\nОписание\n\n', '')
@@ -300,11 +323,13 @@ class ParseEachProduct:
         df_each_product.insert(7, 'Описание', description_list)
         df_each_product.insert(8, 'Цвет', features_colour_list)
         df_each_product.insert(9, 'Вес в упаковке (г)', features_package_weight_list)
-        df_each_product.insert(10, 'Длина упаковки (мм)', features_package_length_list)
-        df_each_product.insert(11, 'Ширина в упаковке (мм)', features_packing_width_list)
-        df_each_product.insert(12, 'Высота упаковки (мм)', features_packing_height_list)
+        df_each_product.insert(10, 'Ширина в упаковке (мм)', features_packing_width_list)
+        df_each_product.insert(11, 'Высота упаковки (мм)', features_packing_height_list)
+        df_each_product.insert(12, 'Длина упаковки (мм)', features_package_length_list)
         df_each_product.insert(13, 'Производитель', features_manufacturer_list)
-        df_each_product.insert(14, 'Ссылки на фото товара', url_add_list)
+        df_each_product.insert(14, 'Ссылка на главное фото товара', url_main_img_add_list)
+        df_each_product.insert(15, 'Ссылки на фото товара', url_img_add_list)
+        df_each_product.insert(16, 'Ссылка на видео товара', video_lst)
         XLS().create_from_one_df(df_each_product, 'Товары', 'res_parse_product')
 
 
@@ -326,6 +351,8 @@ class XLS:
         writer.sheets[sheet].set_column(1, 1, 30)
         writer.sheets[sheet].set_column(7, 7, 30)
         writer.sheets[sheet].set_column(14, 14, 30)
+        writer.sheets[sheet].set_column(15, 15, 30)
+        writer.sheets[sheet].set_column(16, 16, 30)
         writer.close()
         return path
 
@@ -341,11 +368,12 @@ def parse_actual_goods():
 
 
 def parse_discont_items():
-    """Парсер раздела УСПЕЙ КУПИТЬ ВЫГОДНО. На выходе xls"""
+    """Парсер раздела УСПЕЙ КУПИТЬ ВЫГОДНО. На выходе xls. Делается с 1 числа нового месяца"""
     ParseDiscontProduct().get_list_items()
 
 
 def get_each_product():
+    """Актуализация остатков из файла"""
     discont_product_df = XLS().read_xls_to_pd()
     ParseEachProduct().get_attr_each_product(df=discont_product_df)
 
