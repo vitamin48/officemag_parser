@@ -10,6 +10,18 @@ from tqdm import tqdm
 from urllib.request import urlopen as uReq
 import json
 
+from selenium.webdriver import Chrome
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.support.ui import WebDriverWait as wait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import NoSuchElementException
+from selenium.webdriver.common.by import By
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver import Keys, ActionChains
+from time import sleep
+
 
 class WriteFile:
     def __init__(self, values):
@@ -181,6 +193,14 @@ class ParseEachProduct:
             return soup
         else:
             print(f'Ошибка: {r.code}:\ncode={code}')
+
+    def get_current_city(self, soup):
+        """Находим выбранный город"""
+        city = soup.find('ul', class_='HeaderMenu__list HeaderMenu__list--info'). \
+            find('li', class_='HeaderMenu__item HeaderMenu__item--cityDetector '
+                              'js-dropdownCity js-getSelectedCity js-notHref'). \
+            find('a', class_='HeaderMenu__link CityDetector js-cityDetector').text.strip().split('\n')[0].strip()
+        return city
 
     def get_attr_each_product(self, df):
         description_list = []  # описание
@@ -361,6 +381,197 @@ class XLS:
         return discont_product_df
 
 
+class SeleniumParse:
+    def __init__(self, articles):
+        self.save_path = f'{str(Path(__file__).parents[1])}\\officemag_parser'
+        self.__main_url = 'https://www.officemag.ru/'
+        self.options = Options()
+        self.options.add_argument("--start-maximized")
+        self.service = Service('chromedriver.exe')
+        self.browser = webdriver.Chrome(service=self.service, options=self.options)
+        self.soup_list = []
+        self.articles = articles
+
+        self.description_list = []  # описание
+        self.features_colour_list = []  # цвет
+        self.features_package_weight_list = []  # вес в упаковке
+        self.features_package_length_list = []  # Длина упаковки
+        self.features_packing_width_list = []  # ширина в упаковке
+        self.features_packing_height_list = []  # Высота упаковки
+        self.features_manufacturer_list = []  # Производитель
+        self.url_main_img_add_list = []  # основное фото товара
+        self.url_img_add_list = []  # дополнительные ссылки на товар из карточки
+        self.video_lst = []  # видео товара
+        self.price_discount_list = []  # цена с учетом скидки
+        self.krasnoarmeyskaya_list = []
+        self.sovetskaya_list = []
+
+    def set_city(self):
+        for art in self.articles:
+            print(art)
+            soup = ParseEachProduct().get_soup(art)
+            registration = soup.find('div', class_='registrationHintDescription')
+            if registration:
+                print('БАН')
+                return {'status': 'БАН', 'last art': art}
+            city = ParseEachProduct().get_current_city(soup)
+            if city == 'Брянск':
+                print('Брянск')
+                self.get_attr_by_soup(soup)
+            else:
+                self.browser.get(self.__main_url)
+                # city_btn = self.browser.find_element(By.XPATH, '/html/body/div[2]/div[2]/a[2]')
+                city_btn = self.browser.find_element(By.XPATH, '/html/body/div[2]/div[1]/div/ul[2]/li[1]/a')
+                city_btn.click()
+                sleep(3)
+                br_city = self.browser.find_element(By.XPATH,
+                                                    '//*[@id="fancybox-content"]/div/div/div/div[1]/ul[2]/li[1]/div/a')
+                br_city.click()
+                sleep(1)
+                br_city_select = self.browser.find_element(By.XPATH,
+                                                           '//*[@id="fancybox-content"]/div/div/div/div[2]/ul[3]/li[1]/div/a')
+                br_city_select.click()
+                sleep(3)
+                ActionChains(self.browser).send_keys(Keys.ESCAPE).perform()
+                sleep(1)
+                self.browser.get(self.__main_url + art)
+                soup = BeautifulSoup(self.browser.page_source)
+                registration = soup.find('div', class_='registrationHintDescription')
+                if registration:
+                    print('БАН')
+                    return {'status': 'БАН', 'last art': art}
+                else:
+                    self.get_attr_by_soup(soup)
+                print(city)
+            print()
+
+    def get_attr_by_soup(self, soup):
+        self.soup_list.append(soup)
+        if soup.find('span', class_='Price Price--best'):
+            price = float((soup.find('span', class_='Price Price--best').find('span', class_='Price__count').text +
+                           '.' + soup.find('span', class_='Price Price--best').
+                           find('span', class_='Price__penny').text).replace(' ', '').replace(u'\xa0', ''))
+            self.price_discount_list.append(price)
+        else:
+            price = float(soup.find('span', class_='Price__count').text + '.'
+                          + soup.find('span', class_='Price__penny').text)
+            self.price_discount_list.append(price)
+        check_count_url_img = soup.find('ul', class_='ProductPhotoThumbs')
+        if check_count_url_img:
+            url = []
+            main_url = [soup.find('ul', class_='ProductPhotoThumbs').find('li', class_='ProductPhotoThumb active').
+                        find('a', href=True)['href']]
+            surl = soup.find('ul', class_='ProductPhotoThumbs').findAll('li', class_='ProductPhotoThumb')
+            video_present = False
+            for su in surl:
+                url_img = su.find('a', href=True)['href']
+                if 'https://img.youtube.com/' in url_img:
+                    youtube_url = soup.find('input', class_='js-productVideoID').attrs.get('value')
+                    self.video_lst.append(youtube_url)
+                    video_present = True
+                    print()
+                else:
+                    url.append(url_img)
+            if video_present is False:
+                self.video_lst.append('-')
+                video_present = True
+            url_str = ' '.join(url[1:17])
+            self.url_img_add_list.append(url_str)
+            main_url_str = ''.join(main_url)
+            self.url_main_img_add_list.append(main_url_str)
+        elif check_count_url_img is None:
+            # url_from_main_parse = df['Ссылка на изображение'].to_list()[u]
+            self.url_img_add_list.append('-')
+        tabscontent = soup.find('div',
+                                class_='tabsContent js-tabsContent js-tabsContentMobile')  # общая таблица внизу
+        description = tabscontent.find('div', class_='infoDescription').text.replace('\nОписание\n\n', '')
+        self.description_list.append(description)
+        shops = tabscontent.find('div', class_='tabsContent__item pickup'). \
+            find('table', class_='AvailabilityList AvailabilityList--dotted'). \
+            findAll('td', 'AvailabilityBox')
+        krasnoarmeyskaya = shops[1].text
+        if 'заказ' in krasnoarmeyskaya:
+            krasnoarmeyskaya = 0
+        elif 'Поступит' in krasnoarmeyskaya:
+            krasnoarmeyskaya = 0
+        else:
+            krasnoarmeyskaya = int(krasnoarmeyskaya.replace('шт', '').replace(' ', '').replace('.', ''))
+        sovetskaya = shops[3].text
+        if 'заказ' in sovetskaya:
+            sovetskaya = 0
+        elif 'Поступит' in sovetskaya:
+            sovetskaya = 0
+        else:
+            sovetskaya = int(sovetskaya.replace('шт', '').replace(' ', '').replace('.', ''))
+        self.krasnoarmeyskaya_list.append(krasnoarmeyskaya)
+        self.sovetskaya_list.append(sovetskaya)
+        print()
+
+        features = tabscontent.find('ul', class_='infoFeatures')  # общий раздел характеристики
+        li_set = features.find_all('li')
+        l = len(li_set)
+        find_colour = False
+        for i in li_set:
+            print(i.text)
+            if 'Цвет — ' in i.text:
+                self.features_colour_list.append(i.text.replace('Цвет — ', '')[:-1])
+                find_colour = True
+            # if any('Цвет — ' in s for s in li_set):
+            #     if 'Цвет — ' in i.text:
+            #         features_colour_list.append(i.text.replace('Цвет — ', '')[:-1])
+            # else:
+            #     features_colour_list.append('-')
+            if 'Вес с упаковкой' in i.text:
+                weight = i.text.replace('Вес с упаковкой', '').replace('\n', '').replace(' ', '').replace('—', '')
+                if 'кг' in weight:
+                    weight = int((float(weight.replace('кг', '').replace(',', '.')) * 1000))
+                    self.features_package_weight_list.append(weight)
+                else:
+                    weight = int(weight.replace('г', ''))
+                    self.features_package_weight_list.append(weight)
+            elif 'Размер в упаковке' in i.text:
+                string = i.text.replace('Размер в упаковке', '').replace('\n', '').replace('—', '').replace(' ', '')
+                if 'см' in string:
+                    string = string.replace('см', '')
+                    length = int(float(string.split('x')[0]) * 10)
+                    width = int(float(string.split('x')[1]) * 10)
+                    height = int(float(string.split('x')[2]) * 10)
+                    self.features_package_length_list.append(length)
+                    self.features_packing_width_list.append(width)
+                    self.features_packing_height_list.append(height)
+                else:
+                    print(f'Ошибка: в строке \n\n{i.text}\n\nв разделе размер нет см')
+            elif 'Производитель — ' in i.text:
+                manufacturer = i.text.replace('Производитель — ', '').replace(' ', '').replace('\n', '')
+                self.features_manufacturer_list.append(manufacturer)
+            print()
+        if not find_colour:
+            self.features_colour_list.append('-')
+        time.sleep(3)
+
+    def create_df(self):
+        df_each_product = pd.DataFrame()
+        df_each_product.insert(0, 'Артикул', [f'goods_{x}' for x in self.articles])
+        df_each_product.insert(1, 'Название', df['Название'].to_list())
+        df_each_product.insert(2, 'Цена со скидкой', self.price_discount_list)
+        df_each_product.insert(3, 'Актуальный остаток на Советской', self.sovetskaya_list)
+        df_each_product.insert(5, 'Актуальный остаток на Красноармейской', self.krasnoarmeyskaya_list)
+        df_each_product.insert(7, 'Описание', self.description_list)
+        df_each_product.insert(8, 'Цвет', self.features_colour_list)
+        df_each_product.insert(9, 'Вес в упаковке (г)', self.features_package_weight_list)
+        df_each_product.insert(10, 'Ширина в упаковке (мм)', self.features_packing_width_list)
+        df_each_product.insert(11, 'Высота упаковки (мм)', self.features_packing_height_list)
+        df_each_product.insert(12, 'Длина упаковки (мм)', self.features_package_length_list)
+        df_each_product.insert(13, 'Производитель', self.features_manufacturer_list)
+        df_each_product.insert(14, 'Ссылка на главное фото товара', self.url_main_img_add_list)
+        df_each_product.insert(15, 'Ссылки на фото товара', self.url_img_add_list)
+        df_each_product.insert(16, 'Ссылка на видео товара', self.video_lst)
+        XLS().create_from_one_df(df_each_product, 'Товары', 'res_parse_product')
+
+    def start(self):
+        self.set_city()
+
+
 def parse_actual_goods():
     """Парсим товары перебором по его id. Если товар существует, добавляем ссылку на него в текстовый файл"""
     actual_catalog_list = ActualCatalog().get_catalog_status(from_number=4000, to_number=4005)
@@ -373,13 +584,21 @@ def parse_discont_items():
 
 
 def get_each_product():
-    """Актуализация остатков из файла"""
+    """Актуализация остатков из файла xls"""
     discont_product_df = XLS().read_xls_to_pd()
     ParseEachProduct().get_attr_each_product(df=discont_product_df)
 
 
+def get_each_product_from_txt():
+    """Актуализация остатков из файла txt"""
+    with open('art.txt', 'r') as file:
+        # articles = [f'catalog/goods/{line.rstrip()}' for line in file]
+        art = [f'goods_{x}' for x in file]
+    SeleniumParse(articles).start()
+
+
 def main():
-    get_each_product()
+    get_each_product_from_txt()
 
 
 if __name__ == '__main__':
