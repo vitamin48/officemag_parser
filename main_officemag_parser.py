@@ -194,6 +194,22 @@ class ParseEachProduct:
         else:
             print(f'Ошибка: {r.code}:\ncode={code}')
 
+    def check_ban(self):
+        """Проверка на бан и возврат текущего города"""
+        r = uReq(f'{self.__main_url}')
+        if r.code == 200:  # новый синтаксический анализатор
+            soup = BeautifulSoup(r.read(), 'lxml')
+            registration = soup.find('div', class_='registrationHintDescription')
+            city = ParseEachProduct().get_current_city(soup)
+            if registration:
+                print('БАН')
+                return {'status': 'БАН'}
+            else:
+                return {'status': 'OK', 'city': city}
+        else:
+            print(f'Ошибка при запросе: {r.code}')
+            return {'status': 'error'}
+
     def get_current_city(self, soup):
         """Находим выбранный город"""
         city = soup.find('ul', class_='HeaderMenu__list HeaderMenu__list--info'). \
@@ -407,17 +423,22 @@ class SeleniumParse:
         self.sovetskaya_list = []
 
     def set_city(self):
-        for art in self.articles:
-            print(art)
-            soup = ParseEachProduct().get_soup(art)
-            registration = soup.find('div', class_='registrationHintDescription')
-            if registration:
-                print('БАН')
-                return {'status': 'БАН', 'last art': art}
-            city = ParseEachProduct().get_current_city(soup)
-            if city == 'Брянск':
-                print('Брянск')
-                self.get_attr_by_soup(soup)
+        soup_check = ParseEachProduct().check_ban()
+        if soup_check.get('status') == 'OK':
+            if soup_check.get('city') == 'Брянск':
+                for art in self.articles:
+                    print(art)
+                    soup = ParseEachProduct().get_soup(art)
+                    registration = soup.find('div', class_='registrationHintDescription')
+                    if registration:
+                        print('БАН')
+                        return {'status': 'БАН', 'last art': art}
+                    city = ParseEachProduct().get_current_city(soup)
+                    if city == 'Брянск':
+                        print('Брянск')
+                        self.get_attr_by_soup(soup)
+                    else:
+                        self.set_city()
             else:
                 self.browser.get(self.__main_url)
                 # city_btn = self.browser.find_element(By.XPATH, '/html/body/div[2]/div[2]/a[2]')
@@ -434,16 +455,29 @@ class SeleniumParse:
                 sleep(3)
                 ActionChains(self.browser).send_keys(Keys.ESCAPE).perform()
                 sleep(1)
-                self.browser.get(self.__main_url + art)
-                soup = BeautifulSoup(self.browser.page_source)
+                for art in self.articles:
+                    self.browser.get(self.__main_url + art)
+                    soup = BeautifulSoup(self.browser.page_source, 'lxml')
+                    registration = soup.find('div', class_='registrationHintDescription')
+                    if registration:
+                        print('БАН')
+                        return {'status': 'БАН', 'last art': art}
+                    else:
+                        self.get_attr_by_soup(soup)
+            for art in self.articles:
+                print(art)
+                soup = ParseEachProduct().get_soup(art)
                 registration = soup.find('div', class_='registrationHintDescription')
                 if registration:
                     print('БАН')
                     return {'status': 'БАН', 'last art': art}
-                else:
+                city = ParseEachProduct().get_current_city(soup)
+                if city == 'Брянск':
+                    print('Брянск')
                     self.get_attr_by_soup(soup)
-                print(city)
-            print()
+                else:
+
+
 
     def get_attr_by_soup(self, soup):
         self.soup_list.append(soup)
@@ -592,8 +626,8 @@ def get_each_product():
 def get_each_product_from_txt():
     """Актуализация остатков из файла txt"""
     with open('art.txt', 'r') as file:
-        # articles = [f'catalog/goods/{line.rstrip()}' for line in file]
-        art = [f'goods_{x}' for x in file]
+        articles = [f'catalog/goods/{line.rstrip()}' for line in file]  # 'catalog/goods/621130'
+        art = [f'goods_{x[14:]}' for x in articles]  # 'goods_621130'
     SeleniumParse(articles).start()
 
 
