@@ -512,28 +512,14 @@ class SeleniumParse:
             if not video_present:
                 self.video_lst.append('-')
 
-            # url.append(url_img)
-            # if surl.index(su) > len(self.video_lst):
-            #     self.video_lst.append('-')
-
-            # video_present = False
-            # for su in surl:
-            #     url_img = su.find('a', href=True)['href']
-            #     if 'https://img.youtube.com/' in url_img:
-            #         youtube_url = soup.find('input', class_='js-productVideoID').attrs.get('value')
-            #         self.video_lst.append(youtube_url)
-            #         video_present = True
-            #     else:
-            #         url.append(url_img)
-            # if video_present is False:
-            #     self.video_lst.append('-')
-            #     video_present = True
             url_str = ' '.join(url[1:17])
             self.url_img_add_list.append(url_str)
             main_url_str = ''.join(main_url)
             self.url_main_img_add_list.append(main_url_str)
         elif check_count_url_img is None:
+            main_foto = soup.find('span', class_='main js-photoTarget').find('a', href=True)['href']
             # url_from_main_parse = df['Ссылка на изображение'].to_list()[u]
+            self.url_main_img_add_list.append(main_foto)
             self.url_img_add_list.append('-')
         tabscontent = soup.find('div',
                                 class_='tabsContent js-tabsContent js-tabsContentMobile')  # общая таблица внизу
