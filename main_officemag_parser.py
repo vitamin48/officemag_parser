@@ -212,11 +212,15 @@ class ParseEachProduct:
 
     def get_current_city(self, soup):
         """Находим выбранный город"""
-        city = soup.find('ul', class_='HeaderMenu__list HeaderMenu__list--info'). \
-            find('li', class_='HeaderMenu__item HeaderMenu__item--cityDetector '
-                              'js-dropdownCity js-getSelectedCity js-notHref'). \
-            find('a', class_='HeaderMenu__link CityDetector js-cityDetector').text.strip().split('\n')[0].strip()
-        return city
+        try:
+            city = soup.find('ul', class_='HeaderMenu__list HeaderMenu__list--info'). \
+                find('li', class_='HeaderMenu__item HeaderMenu__item--cityDetector '
+                                  'js-dropdownCity js-getSelectedCity js-notHref'). \
+                find('a', class_='HeaderMenu__link CityDetector js-cityDetector').text.strip().split('\n')[0].strip()
+            return city
+        except:
+            city = soup.find('a', class_='HeaderMenu__link CityDetector').text.strip()
+            return city
 
     def get_attr_each_product(self, df):
         description_list = []  # описание
@@ -385,10 +389,10 @@ class XLS:
             col_idx = df.columns.get_loc(column)
             writer.sheets[f'{sheet}'].set_column(col_idx, col_idx, column_width)
         writer.sheets[sheet].set_column(1, 1, 30)
-        writer.sheets[sheet].set_column(7, 7, 30)
+        writer.sheets[sheet].set_column(6, 6, 30)
+        writer.sheets[sheet].set_column(13, 13, 30)
         writer.sheets[sheet].set_column(14, 14, 30)
         writer.sheets[sheet].set_column(15, 15, 30)
-        writer.sheets[sheet].set_column(16, 16, 30)
         writer.close()
         return path
 
@@ -409,6 +413,7 @@ class SeleniumParse:
         self.articles = articles_with_catalog
         self.art = arts
 
+        self.product_name = []  # Название товара
         self.description_list = []  # описание
         self.features_colour_list = []  # цвет
         self.features_package_weight_list = []  # вес в упаковке
@@ -440,6 +445,7 @@ class SeleniumParse:
                         self.get_attr_by_soup(soup)
                     else:
                         self.set_city()
+                return {'status': 'OK'}
             else:
                 self.browser.get(self.__main_url)
                 # city_btn = self.browser.find_element(By.XPATH, '/html/body/div[2]/div[2]/a[2]')
@@ -457,17 +463,8 @@ class SeleniumParse:
                 ActionChains(self.browser).send_keys(Keys.ESCAPE).perform()
                 sleep(1)
                 for art in self.articles:
-                    self.browser.get(self.__main_url + art)
-                    soup = BeautifulSoup(self.browser.page_source, 'lxml')
-                    registration = soup.find('div', class_='registrationHintDescription')
-                    if registration:
-                        print(f'БАН {art}')
-                        return {'status': 'БАН', 'last art': art}
-                    else:
-                        self.get_attr_by_soup(soup)
-                for art in self.articles:
                     print(art)
-                    soup = ParseEachProduct().get_soup(art)
+                    soup = BeautifulSoup(self.browser.page_source, 'lxml')
                     registration = soup.find('div', class_='registrationHintDescription')
                     if registration:
                         print('БАН')
@@ -475,13 +472,17 @@ class SeleniumParse:
                     city = ParseEachProduct().get_current_city(soup)
                     if city == 'Брянск':
                         print('Брянск')
+                        self.browser.get(self.__main_url + art)
+                        soup = BeautifulSoup(self.browser.page_source, 'lxml')
                         self.get_attr_by_soup(soup)
                     else:
-
-
+                        self.set_city()
+                return {'status': 'OK'}
 
     def get_attr_by_soup(self, soup):
         self.soup_list.append(soup)
+        name = soup.find('div', class_='Product__name').text
+        self.product_name.append(name)
         if soup.find('span', class_='Price Price--best'):
             price = float((soup.find('span', class_='Price Price--best').find('span', class_='Price__count').text +
                            '.' + soup.find('span', class_='Price Price--best').
@@ -504,12 +505,29 @@ class SeleniumParse:
                     youtube_url = soup.find('input', class_='js-productVideoID').attrs.get('value')
                     self.video_lst.append(youtube_url)
                     video_present = True
-                    print()
                 else:
+                    video_present = False
                     url.append(url_img)
-            if video_present is False:
+
+            if not video_present:
                 self.video_lst.append('-')
-                video_present = True
+
+            # url.append(url_img)
+            # if surl.index(su) > len(self.video_lst):
+            #     self.video_lst.append('-')
+
+            # video_present = False
+            # for su in surl:
+            #     url_img = su.find('a', href=True)['href']
+            #     if 'https://img.youtube.com/' in url_img:
+            #         youtube_url = soup.find('input', class_='js-productVideoID').attrs.get('value')
+            #         self.video_lst.append(youtube_url)
+            #         video_present = True
+            #     else:
+            #         url.append(url_img)
+            # if video_present is False:
+            #     self.video_lst.append('-')
+            #     video_present = True
             url_str = ' '.join(url[1:17])
             self.url_img_add_list.append(url_str)
             main_url_str = ''.join(main_url)
@@ -540,14 +558,13 @@ class SeleniumParse:
             sovetskaya = int(sovetskaya.replace('шт', '').replace(' ', '').replace('.', ''))
         self.krasnoarmeyskaya_list.append(krasnoarmeyskaya)
         self.sovetskaya_list.append(sovetskaya)
-        print()
 
         features = tabscontent.find('ul', class_='infoFeatures')  # общий раздел характеристики
         li_set = features.find_all('li')
         l = len(li_set)
         find_colour = False
         for i in li_set:
-            print(i.text)
+            # print(i.text)
             if 'Цвет — ' in i.text:
                 self.features_colour_list.append(i.text.replace('Цвет — ', '')[:-1])
                 find_colour = True
@@ -579,7 +596,6 @@ class SeleniumParse:
             elif 'Производитель — ' in i.text:
                 manufacturer = i.text.replace('Производитель — ', '').replace(' ', '').replace('\n', '')
                 self.features_manufacturer_list.append(manufacturer)
-            print()
         if not find_colour:
             self.features_colour_list.append('-')
         time.sleep(3)
@@ -587,24 +603,27 @@ class SeleniumParse:
     def create_df(self):
         df_each_product = pd.DataFrame()
         df_each_product.insert(0, 'Артикул', self.art)
-        df_each_product.insert(1, 'Название', df['Название'].to_list())
+        df_each_product.insert(1, 'Название', self.product_name)
         df_each_product.insert(2, 'Цена со скидкой', self.price_discount_list)
-        df_each_product.insert(3, 'Актуальный остаток на Советской', self.sovetskaya_list)
-        df_each_product.insert(5, 'Актуальный остаток на Красноармейской', self.krasnoarmeyskaya_list)
-        df_each_product.insert(7, 'Описание', self.description_list)
-        df_each_product.insert(8, 'Цвет', self.features_colour_list)
-        df_each_product.insert(9, 'Вес в упаковке (г)', self.features_package_weight_list)
-        df_each_product.insert(10, 'Ширина в упаковке (мм)', self.features_packing_width_list)
-        df_each_product.insert(11, 'Высота упаковки (мм)', self.features_packing_height_list)
-        df_each_product.insert(12, 'Длина упаковки (мм)', self.features_package_length_list)
-        df_each_product.insert(13, 'Производитель', self.features_manufacturer_list)
-        df_each_product.insert(14, 'Ссылка на главное фото товара', self.url_main_img_add_list)
-        df_each_product.insert(15, 'Ссылки на фото товара', self.url_img_add_list)
-        df_each_product.insert(16, 'Ссылка на видео товара', self.video_lst)
-        XLS().create_from_one_df(df_each_product, 'Товары', 'res_parse_product')
+        df_each_product.insert(3, 'Общий остаток', [self.sovetskaya_list[i] + self.krasnoarmeyskaya_list[i] for i in
+                                                    range(len(self.krasnoarmeyskaya_list))])
+        df_each_product.insert(4, 'Остаток на Советской', self.sovetskaya_list)
+        df_each_product.insert(5, 'Остаток на Красноармейской', self.krasnoarmeyskaya_list)
+        df_each_product.insert(6, 'Описание', self.description_list)
+        df_each_product.insert(7, 'Цвет', self.features_colour_list)
+        df_each_product.insert(8, 'Вес в упаковке (г)', self.features_package_weight_list)
+        df_each_product.insert(9, 'Ширина в упаковке (мм)', self.features_packing_width_list)
+        df_each_product.insert(10, 'Высота упаковки (мм)', self.features_packing_height_list)
+        df_each_product.insert(11, 'Длина упаковки (мм)', self.features_package_length_list)
+        df_each_product.insert(12, 'Производитель', self.features_manufacturer_list)
+        df_each_product.insert(13, 'Ссылка на главное фото товара', self.url_main_img_add_list)
+        df_each_product.insert(14, 'Ссылки на фото товара', self.url_img_add_list)
+        df_each_product.insert(15, 'Ссылка на видео товара', self.video_lst)
+        XLS().create_from_one_df(df_each_product, 'Товары', 'new_res_parse_product')
 
     def start(self):
         self.set_city()
+        self.create_df()
 
 
 def parse_actual_goods():
