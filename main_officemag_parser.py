@@ -398,7 +398,7 @@ class XLS:
 
 
 class SeleniumParse:
-    def __init__(self, articles):
+    def __init__(self, articles_with_catalog, arts):
         self.save_path = f'{str(Path(__file__).parents[1])}\\officemag_parser'
         self.__main_url = 'https://www.officemag.ru/'
         self.options = Options()
@@ -406,7 +406,8 @@ class SeleniumParse:
         self.service = Service('chromedriver.exe')
         self.browser = webdriver.Chrome(service=self.service, options=self.options)
         self.soup_list = []
-        self.articles = articles
+        self.articles = articles_with_catalog
+        self.art = arts
 
         self.description_list = []  # описание
         self.features_colour_list = []  # цвет
@@ -431,7 +432,7 @@ class SeleniumParse:
                     soup = ParseEachProduct().get_soup(art)
                     registration = soup.find('div', class_='registrationHintDescription')
                     if registration:
-                        print('БАН')
+                        print(f'БАН {art}')
                         return {'status': 'БАН', 'last art': art}
                     city = ParseEachProduct().get_current_city(soup)
                     if city == 'Брянск':
@@ -460,22 +461,22 @@ class SeleniumParse:
                     soup = BeautifulSoup(self.browser.page_source, 'lxml')
                     registration = soup.find('div', class_='registrationHintDescription')
                     if registration:
-                        print('БАН')
+                        print(f'БАН {art}')
                         return {'status': 'БАН', 'last art': art}
                     else:
                         self.get_attr_by_soup(soup)
-            for art in self.articles:
-                print(art)
-                soup = ParseEachProduct().get_soup(art)
-                registration = soup.find('div', class_='registrationHintDescription')
-                if registration:
-                    print('БАН')
-                    return {'status': 'БАН', 'last art': art}
-                city = ParseEachProduct().get_current_city(soup)
-                if city == 'Брянск':
-                    print('Брянск')
-                    self.get_attr_by_soup(soup)
-                else:
+                for art in self.articles:
+                    print(art)
+                    soup = ParseEachProduct().get_soup(art)
+                    registration = soup.find('div', class_='registrationHintDescription')
+                    if registration:
+                        print('БАН')
+                        return {'status': 'БАН', 'last art': art}
+                    city = ParseEachProduct().get_current_city(soup)
+                    if city == 'Брянск':
+                        print('Брянск')
+                        self.get_attr_by_soup(soup)
+                    else:
 
 
 
@@ -585,7 +586,7 @@ class SeleniumParse:
 
     def create_df(self):
         df_each_product = pd.DataFrame()
-        df_each_product.insert(0, 'Артикул', [f'goods_{x}' for x in self.articles])
+        df_each_product.insert(0, 'Артикул', self.art)
         df_each_product.insert(1, 'Название', df['Название'].to_list())
         df_each_product.insert(2, 'Цена со скидкой', self.price_discount_list)
         df_each_product.insert(3, 'Актуальный остаток на Советской', self.sovetskaya_list)
@@ -626,9 +627,9 @@ def get_each_product():
 def get_each_product_from_txt():
     """Актуализация остатков из файла txt"""
     with open('art.txt', 'r') as file:
-        articles = [f'catalog/goods/{line.rstrip()}' for line in file]  # 'catalog/goods/621130'
-        art = [f'goods_{x[14:]}' for x in articles]  # 'goods_621130'
-    SeleniumParse(articles).start()
+        articles_with_catalog = [f'catalog/goods/{line.rstrip()}' for line in file]  # 'catalog/goods/621130'
+        arts = [f'goods_{x[14:]}' for x in articles_with_catalog]  # 'goods_621130'
+    SeleniumParse(articles_with_catalog, arts).start()
 
 
 def main():
