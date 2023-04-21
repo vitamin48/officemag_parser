@@ -57,7 +57,6 @@ class ActualCatalog:
                             print(f'\nБАН на сайте для прокси: {pr}')
                             bad_proxy_list.append(pr)
                             continue
-                            # return actual_catalog_list
                         if iteminfodetails:
                             actual_catalog_list.append(i)
                         break
