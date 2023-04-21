@@ -41,26 +41,30 @@ class ActualCatalog:
 
     def get_catalog_status(self, from_number, to_number):
         actual_catalog_list = []
-        url = ''
+        bad_proxy_list = []
         for i in tqdm(range(from_number, to_number + 1)):
             for pr in self.proxy_list:
-                act_url = self.catalog + f'{i}'
-                try:
-                    r = requests.get(act_url, proxies={'https': f'{pr}'}, timeout=5.5)
-                    soup = BeautifulSoup(r.text, 'lxml')
-                    iteminfodetails = soup.find('div', class_='itemInfoDetails group')
-                    registration = soup.find('div', class_='registrationHintDescription')
-                    if registration:
-                        print(f'\nБАН на сайте для прокси: {pr}')
-                        continue
-                        # return actual_catalog_list
-                    if iteminfodetails:
-                        actual_catalog_list.append(i)
-                    break
-                except Exception as exp:
-                    print(f'\n{exp.__class__.__name__}')
-                    if exp.__class__.__name__ == 'ProxyError' or 'TimeoutError':
-                        print(f'Не рабочий прокси: {pr}')
+                if pr in bad_proxy_list:
+                    continue
+                else:
+                    act_url = self.catalog + f'{i}'
+                    try:
+                        r = requests.get(act_url, proxies={'https': f'{pr}'}, timeout=5.5)
+                        soup = BeautifulSoup(r.text, 'lxml')
+                        iteminfodetails = soup.find('div', class_='itemInfoDetails group')
+                        registration = soup.find('div', class_='registrationHintDescription')
+                        if registration:
+                            print(f'\nБАН на сайте для прокси: {pr}')
+                            bad_proxy_list.append(pr)
+                            continue
+                            # return actual_catalog_list
+                        if iteminfodetails:
+                            actual_catalog_list.append(i)
+                        break
+                    except Exception as exp:
+                        print(f'Не рабочий прокси: {pr}. Ошибка: {exp.__class__.__name__}')
+                        bad_proxy_list.append(pr)
+
         return actual_catalog_list
 
 
