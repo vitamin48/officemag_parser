@@ -44,6 +44,9 @@ class ActualCatalog:
         bad_proxy_list = []
         for i in tqdm(range(from_number, to_number + 1)):
             for pr in self.proxy_list:
+                if len(self.proxy_list) == len(bad_proxy_list):
+                    print('Закончились прокси!')
+                    return actual_catalog_list
                 if pr in bad_proxy_list:
                     continue
                 else:
@@ -662,7 +665,7 @@ def parse_actual_goods():
     """Парсим товары перебором по его id. Если товар существует, добавляем его артикул в текстовый файл"""
     with open('input\\proxy_file_checked.txt', 'r') as proxy_file:
         proxy_list = proxy_file.read().split('\n')
-    actual_catalog_list = ActualCatalog(proxy_list).get_catalog_status(from_number=401, to_number=450)
+    actual_catalog_list = ActualCatalog(proxy_list).get_catalog_status(from_number=451, to_number=650)
     if actual_catalog_list:
         WriteFile(values=actual_catalog_list).write_txt_file_catalog_status()
     else:
