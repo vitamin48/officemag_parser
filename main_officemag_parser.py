@@ -34,6 +34,18 @@ class WriteFile:
                 output.write(str(row) + '\n')
 
 
+class bcolors:
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKCYAN = '\033[96m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+
+
 class ActualCatalog:
     def __init__(self, proxy_list):
         self.catalog = 'https://www.officemag.ru/catalog/goods/'
@@ -42,14 +54,26 @@ class ActualCatalog:
     def get_catalog_status(self, from_number, to_number):
         actual_catalog_list = []
         bad_proxy_list = []
-        for i in tqdm(range(from_number, to_number + 1)):
+        delta_time = 0
+        # cur_i = desc = pr = 'start'
+        for i in range(from_number, to_number + 1):
+            start = time.time()
+            # desc = f'\nДля артикула: {i} используется прокси: {pr}'
             for pr in self.proxy_list:
                 if len(self.proxy_list) == len(bad_proxy_list):
-                    print(f'Закончились прокси! Последний проверенный артикул: {i-1}')
+                    print(f'Закончились прокси! Последний проверенный артикул: {i - 1}')
                     return actual_catalog_list
                 if pr in bad_proxy_list:
                     continue
                 else:
+                    print(f'Для артикула: {i} используется прокси: {pr}. Прогресс: {i - from_number} из '
+                          f'{to_number - from_number} '
+                          f'({round((i - from_number + 0.0000001) / (to_number - from_number) * 100, 1)} %)'
+                          f' Скорость: {delta_time}')
+                    if delta_time > 35:
+                        # print(f'{bcolors.OKBLUE}Скорость опустилась до 35 секунд за итерацию!{bcolors.ENDC}')
+                        print(f'Скорость опустилась до 35 секунд за итерацию!')
+                        # continue
                     act_url = self.catalog + f'{i}'
                     try:
                         r = requests.get(act_url, proxies={'https': f'{pr}'}, timeout=5.5)
@@ -57,16 +81,21 @@ class ActualCatalog:
                         iteminfodetails = soup.find('div', class_='itemInfoDetails group')
                         registration = soup.find('div', class_='registrationHintDescription')
                         if registration:
-                            print(f'\nБАН на сайте для прокси: {pr}')
+                            # print(f'{bcolors.FAIL}БАН на сайте для прокси: {pr}{bcolors.ENDC}')
+                            print(f'БАН на сайте для прокси: {pr}')
                             bad_proxy_list.append(pr)
                             continue
                         if iteminfodetails:
                             actual_catalog_list.append(i)
                         break
                     except Exception as exp:
-                        print(f'Не рабочий прокси: {pr}. Ошибка: {exp.__class__.__name__}')
+                        # print(f'{bcolors.WARNING}Нерабочий прокси: {pr}. '
+                        #       f'Ошибка: {exp.__class__.__name__}{bcolors.ENDC}')
+                        print(f'Нерабочий прокси: {pr}. '
+                              f'Ошибка: {exp.__class__.__name__}')
                         bad_proxy_list.append(pr)
-
+            end = time.time()
+            delta_time = round((end - start), 2)
         return actual_catalog_list
 
 
@@ -426,6 +455,7 @@ class SeleniumParse:
         self.soup_list = []
         self.articles = articles_with_catalog
         self.art = arts
+        self.bad_brand_list = ['Lavazza', 'BRAUBERG', 'DURACELL', 'SYNERGETIC', 'FRESCO', 'SONNEN']
         self.df_each_product = pd.DataFrame()
 
         self.product_name = []  # Название товара
@@ -457,7 +487,7 @@ class SeleniumParse:
                     city = ParseEachProduct().get_current_city(soup)
                     if city == 'Брянск':
                         print('Брянск')
-                        self.get_attr_by_soup(soup)
+                        self.get_attr_by_soup(soup, art)
                     else:
                         self.set_city_and_get_data()
                 return {'status': 'OK'}
@@ -490,16 +520,23 @@ class SeleniumParse:
                         print('Брянск')
                         browser.get(self.__main_url + art)
                         soup = BeautifulSoup(browser.page_source, 'lxml')
-                        self.get_attr_by_soup(soup)
+                        self.get_attr_by_soup(soup, art)
                     else:
                         self.set_city_and_get_data()
-                browser.close()
+                # browser.close()
                 return {'status': 'OK'}
         elif soup_check.get('status') == 'ban':
             print()
 
-    def get_attr_by_soup(self, soup):
+    def add_empty_row(self):
+        """Добавляем пустую строку"""
+        pass
+
+    def get_attr_by_soup(self, soup, art):
+        current_art = f'goods_{art.split("/")[-1]}'
+        aaa = soup.find('div', class_='ProductState ProductState--red').text
         if soup.find('div', class_='junctionInfo junctionInfo--notFound'):
+            print('Страница не найдена')
             self.product_name.append('Страница не найдена')
             self.description_list.append('-')
             self.features_colour_list.append('-')
@@ -514,6 +551,16 @@ class SeleniumParse:
             self.price_discount_list.append(0)
             self.krasnoarmeyskaya_list.append('-')
             self.sovetskaya_list.append('-')
+        elif soup.find('div', class_='ProductState ProductState--red').text == 'Недоступен к\xa0заказу':
+            aaa = soup.find('div', class_='ProductState ProductState--red').text
+            self.art.remove(current_art)
+            print('Товар недоступен к заказу')
+        elif any(ext.lower() in soup.find('div', class_='Product__name').text.lower() for ext in self.bad_brand_list):
+            self.art.remove(current_art)
+            print('Товар из списка нежелательных брэндов')
+        # elif 'FRESCO' in soup.find('div', class_='Product__name').text:
+        #     self.art.remove(f'goods_{art}')
+        #     print('fffrrfrfresco')
         else:
             self.soup_list.append(soup)
             name = soup.find('div', class_='Product__name').text
@@ -665,9 +712,11 @@ def parse_actual_goods():
     """Парсим товары перебором по его id. Если товар существует, добавляем его артикул в текстовый файл"""
     with open('input\\proxy_file_checked.txt', 'r') as proxy_file:
         proxy_list = proxy_file.read().split('\n')
-    actual_catalog_list = ActualCatalog(proxy_list).get_catalog_status(from_number=2001, to_number=5000)
+    actual_catalog_list = ActualCatalog(proxy_list).get_catalog_status(from_number=2761, to_number=3000)
     if actual_catalog_list:
         WriteFile(values=actual_catalog_list).write_txt_file_catalog_status()
+        print(f'Успешно добавлено артикулов: {len(actual_catalog_list)}')
+        print(actual_catalog_list)
     else:
         print('Нет активных товаров в указанном диапазоне')
 
@@ -681,7 +730,7 @@ def get_each_product_from_txt():
 
 
 def main():
-    parse_actual_goods()
+    get_each_product_from_txt()
 
 
 if __name__ == '__main__':
