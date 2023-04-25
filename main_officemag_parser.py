@@ -482,12 +482,12 @@ class SeleniumParse:
                     soup = ParseEachProduct().get_soup(art)
                     registration = soup.find('div', class_='registrationHintDescription')
                     if registration:
-                        print(f'БАН {art}')
+                        # print(f'БАН {art}')
                         return {'status': 'БАН', 'last art': art}
                     city = ParseEachProduct().get_current_city(soup)
                     if city == 'Брянск':
                         print('Брянск')
-                        self.get_attr_by_soup(soup, art)
+                        self.check_attr_by_soup(soup, art)
                     else:
                         self.set_city_and_get_data()
                 return {'status': 'OK'}
@@ -509,6 +509,7 @@ class SeleniumParse:
                 ActionChains(browser).send_keys(Keys.ESCAPE).perform()
                 sleep(2)
                 for art in self.articles:
+                    time.sleep(2)
                     print(art)
                     soup = BeautifulSoup(browser.page_source, 'lxml')
                     registration = soup.find('div', class_='registrationHintDescription')
@@ -517,10 +518,10 @@ class SeleniumParse:
                         return {'status': 'БАН', 'last art': art}
                     city = ParseEachProduct().get_current_city(soup)
                     if city == 'Брянск':
-                        print('Брянск')
+                        # print('Брянск')
                         browser.get(self.__main_url + art)
                         soup = BeautifulSoup(browser.page_source, 'lxml')
-                        self.get_attr_by_soup(soup, art)
+                        self.check_attr_by_soup(soup, art)
                     else:
                         self.set_city_and_get_data()
                 # browser.close()
@@ -532,142 +533,142 @@ class SeleniumParse:
         """Добавляем пустую строку"""
         pass
 
-    def get_attr_by_soup(self, soup, art):
+    def check_attr_by_soup(self, soup, art):
+        check_list = []
         current_art = f'goods_{art.split("/")[-1]}'
-        aaa = soup.find('div', class_='ProductState ProductState--red').text
-        if soup.find('div', class_='junctionInfo junctionInfo--notFound'):
-            print('Страница не найдена')
-            self.product_name.append('Страница не найдена')
-            self.description_list.append('-')
-            self.features_colour_list.append('-')
-            self.features_package_weight_list.append('-')
-            self.features_package_length_list.append('-')
-            self.features_packing_width_list.append('-')
-            self.features_packing_height_list.append('-')
-            self.features_manufacturer_list.append('-')
-            self.url_main_img_add_list.append('-')
+        if soup.find('div', class_='ProductState ProductState--red'):
+            red_product_state = soup.find('div', class_='ProductState ProductState--red').text
+            if red_product_state == 'Недоступен к\xa0заказу':
+                check_list.append('-')
+                print('Товар недоступен к заказу')
+        else:
+            check_list.append('+')
+        if any(ext.lower() in soup.find('div', class_='Product__name').text.lower() for ext in self.bad_brand_list):
+            check_list.append('-')
+            print('Товар из списка нежелательных брэндов')
+        else:
+            check_list.append('+')
+        if soup.find('div', class_='ProductState ProductState--gray'):
+            min_count_str = soup.find('div', class_='ProductState ProductState--gray').text
+            min_count = int(re.findall(r'\d+', min_count_str)[0])
+            if min_count > 1:
+                check_list.append('-')
+                print(f'Минимальная партия более 1, а именно: {min_count}')
+            else:
+                check_list.append('+')
+        if '-' not in check_list:
+            print('+')
+            self.get_attr_by_soup(soup)
+        else:
+            self.art.remove(current_art)
+
+    def get_attr_by_soup(self, soup):
+        self.soup_list.append(soup)
+        name = soup.find('div', class_='Product__name').text
+        self.product_name.append(name)
+        if soup.find('span', class_='Price Price--best'):
+            price = float((soup.find('span', class_='Price Price--best').find('span', class_='Price__count').text +
+                           '.' + soup.find('span', class_='Price Price--best').
+                           find('span', class_='Price__penny').text).replace(' ', '').replace(u'\xa0', ''))
+            self.price_discount_list.append(price)
+        else:
+            price = float(soup.find('span', class_='Price__count').text.replace(u'\xa0', '') + '.'
+                          + soup.find('span', class_='Price__penny').text)
+            self.price_discount_list.append(price)
+        check_count_url_img = soup.find('ul', class_='ProductPhotoThumbs')
+        if check_count_url_img:
+            url = []
+            main_url = [soup.find('ul', class_='ProductPhotoThumbs').find('li', class_='ProductPhotoThumb active').
+                        find('a', href=True)['href']]
+            surl = soup.find('ul', class_='ProductPhotoThumbs').findAll('li', class_='ProductPhotoThumb')
+            video_present = False
+            for su in surl:
+                url_img = su.find('a', href=True)['href']
+                if 'https://img.youtube.com/' in url_img:
+                    youtube_url = soup.find('input', class_='js-productVideoID').attrs.get('value')
+                    self.video_lst.append(youtube_url)
+                    video_present = True
+                else:
+                    video_present = False
+                    url.append(url_img)
+
+            if not video_present:
+                self.video_lst.append('-')
+
+            url_str = ' '.join(url[1:17])
+            self.url_img_add_list.append(url_str)
+            main_url_str = ''.join(main_url)
+            self.url_main_img_add_list.append(main_url_str)
+        elif check_count_url_img is None:
+            main_foto = soup.find('span', class_='main js-photoTarget').find('a', href=True)['href']
+            # url_from_main_parse = df['Ссылка на изображение'].to_list()[u]
+            self.url_main_img_add_list.append(main_foto)
             self.url_img_add_list.append('-')
             self.video_lst.append('-')
-            self.price_discount_list.append(0)
-            self.krasnoarmeyskaya_list.append('-')
-            self.sovetskaya_list.append('-')
-        elif soup.find('div', class_='ProductState ProductState--red').text == 'Недоступен к\xa0заказу':
-            aaa = soup.find('div', class_='ProductState ProductState--red').text
-            self.art.remove(current_art)
-            print('Товар недоступен к заказу')
-        elif any(ext.lower() in soup.find('div', class_='Product__name').text.lower() for ext in self.bad_brand_list):
-            self.art.remove(current_art)
-            print('Товар из списка нежелательных брэндов')
-        # elif 'FRESCO' in soup.find('div', class_='Product__name').text:
-        #     self.art.remove(f'goods_{art}')
-        #     print('fffrrfrfresco')
+        tabscontent = soup.find('div',
+                                class_='tabsContent js-tabsContent js-tabsContentMobile')  # общая таблица внизу
+        description = tabscontent.find('div', class_='infoDescription').text.replace('\nОписание\n\n', '')
+        self.description_list.append(description)
+        shops = tabscontent.find('div', class_='tabsContent__item pickup'). \
+            find('table', class_='AvailabilityList AvailabilityList--dotted'). \
+            findAll('td', 'AvailabilityBox')
+        krasnoarmeyskaya = shops[1].text
+        if 'заказ' in krasnoarmeyskaya:
+            krasnoarmeyskaya = 0
+        elif 'Поступит' in krasnoarmeyskaya:
+            krasnoarmeyskaya = 0
         else:
-            self.soup_list.append(soup)
-            name = soup.find('div', class_='Product__name').text
-            self.product_name.append(name)
-            if soup.find('span', class_='Price Price--best'):
-                price = float((soup.find('span', class_='Price Price--best').find('span', class_='Price__count').text +
-                               '.' + soup.find('span', class_='Price Price--best').
-                               find('span', class_='Price__penny').text).replace(' ', '').replace(u'\xa0', ''))
-                self.price_discount_list.append(price)
-            else:
-                price = float(soup.find('span', class_='Price__count').text + '.'
-                              + soup.find('span', class_='Price__penny').text)
-                self.price_discount_list.append(price)
-            check_count_url_img = soup.find('ul', class_='ProductPhotoThumbs')
-            if check_count_url_img:
-                url = []
-                main_url = [soup.find('ul', class_='ProductPhotoThumbs').find('li', class_='ProductPhotoThumb active').
-                            find('a', href=True)['href']]
-                surl = soup.find('ul', class_='ProductPhotoThumbs').findAll('li', class_='ProductPhotoThumb')
-                video_present = False
-                for su in surl:
-                    url_img = su.find('a', href=True)['href']
-                    if 'https://img.youtube.com/' in url_img:
-                        youtube_url = soup.find('input', class_='js-productVideoID').attrs.get('value')
-                        self.video_lst.append(youtube_url)
-                        video_present = True
-                    else:
-                        video_present = False
-                        url.append(url_img)
+            krasnoarmeyskaya = int(krasnoarmeyskaya.replace('шт', '').replace(' ', '').replace('.', ''))
+        sovetskaya = shops[3].text
+        if 'заказ' in sovetskaya:
+            sovetskaya = 0
+        elif 'Поступит' in sovetskaya:
+            sovetskaya = 0
+        else:
+            sovetskaya = int(sovetskaya.replace('шт', '').replace(' ', '').replace('.', ''))
+        self.krasnoarmeyskaya_list.append(krasnoarmeyskaya)
+        self.sovetskaya_list.append(sovetskaya)
 
-                if not video_present:
-                    self.video_lst.append('-')
-
-                url_str = ' '.join(url[1:17])
-                self.url_img_add_list.append(url_str)
-                main_url_str = ''.join(main_url)
-                self.url_main_img_add_list.append(main_url_str)
-            elif check_count_url_img is None:
-                main_foto = soup.find('span', class_='main js-photoTarget').find('a', href=True)['href']
-                # url_from_main_parse = df['Ссылка на изображение'].to_list()[u]
-                self.url_main_img_add_list.append(main_foto)
-                self.url_img_add_list.append('-')
-                self.video_lst.append('-')
-            tabscontent = soup.find('div',
-                                    class_='tabsContent js-tabsContent js-tabsContentMobile')  # общая таблица внизу
-            description = tabscontent.find('div', class_='infoDescription').text.replace('\nОписание\n\n', '')
-            self.description_list.append(description)
-            shops = tabscontent.find('div', class_='tabsContent__item pickup'). \
-                find('table', class_='AvailabilityList AvailabilityList--dotted'). \
-                findAll('td', 'AvailabilityBox')
-            krasnoarmeyskaya = shops[1].text
-            if 'заказ' in krasnoarmeyskaya:
-                krasnoarmeyskaya = 0
-            elif 'Поступит' in krasnoarmeyskaya:
-                krasnoarmeyskaya = 0
-            else:
-                krasnoarmeyskaya = int(krasnoarmeyskaya.replace('шт', '').replace(' ', '').replace('.', ''))
-            sovetskaya = shops[3].text
-            if 'заказ' in sovetskaya:
-                sovetskaya = 0
-            elif 'Поступит' in sovetskaya:
-                sovetskaya = 0
-            else:
-                sovetskaya = int(sovetskaya.replace('шт', '').replace(' ', '').replace('.', ''))
-            self.krasnoarmeyskaya_list.append(krasnoarmeyskaya)
-            self.sovetskaya_list.append(sovetskaya)
-
-            features = tabscontent.find('ul', class_='infoFeatures')  # общий раздел характеристики
-            li_set = features.find_all('li')
-            l = len(li_set)
-            find_colour = False
-            for i in li_set:
-                # print(i.text)
-                if 'Цвет — ' in i.text:
-                    self.features_colour_list.append(i.text.replace('Цвет — ', '')[:-1])
-                    find_colour = True
-                # if any('Цвет — ' in s for s in li_set):
-                #     if 'Цвет — ' in i.text:
-                #         features_colour_list.append(i.text.replace('Цвет — ', '')[:-1])
-                # else:
-                #     features_colour_list.append('-')
-                if 'Вес с упаковкой' in i.text:
-                    weight = i.text.replace('Вес с упаковкой', '').replace('\n', '').replace(' ', '').replace('—', '')
-                    if 'кг' in weight:
-                        weight = int((float(weight.replace('кг', '').replace(',', '.')) * 1000))
-                        self.features_package_weight_list.append(weight)
-                    else:
-                        weight = int(weight.replace('г', ''))
-                        self.features_package_weight_list.append(weight)
-                elif 'Размер в упаковке' in i.text:
-                    string = i.text.replace('Размер в упаковке', '').replace('\n', '').replace('—', '').replace(' ', '')
-                    if 'см' in string:
-                        string = string.replace('см', '')
-                        length = int(float(string.split('x')[0]) * 10)
-                        width = int(float(string.split('x')[1]) * 10)
-                        height = int(float(string.split('x')[2]) * 10)
-                        self.features_package_length_list.append(length)
-                        self.features_packing_width_list.append(width)
-                        self.features_packing_height_list.append(height)
-                    else:
-                        print(f'Ошибка: в строке \n\n{i.text}\n\nв разделе размер нет см')
-                elif 'Производитель — ' in i.text:
-                    manufacturer = i.text.replace('Производитель — ', '').replace(' ', '').replace('\n', '')
-                    self.features_manufacturer_list.append(manufacturer)
-            if not find_colour:
-                self.features_colour_list.append('-')
-            time.sleep(3)
+        features = tabscontent.find('ul', class_='infoFeatures')  # общий раздел характеристики
+        li_set = features.find_all('li')
+        l = len(li_set)
+        find_colour = False
+        for i in li_set:
+            # print(i.text)
+            if 'Цвет — ' in i.text:
+                self.features_colour_list.append(i.text.replace('Цвет — ', '')[:-1])
+                find_colour = True
+            # if any('Цвет — ' in s for s in li_set):
+            #     if 'Цвет — ' in i.text:
+            #         features_colour_list.append(i.text.replace('Цвет — ', '')[:-1])
+            # else:
+            #     features_colour_list.append('-')
+            if 'Вес с упаковкой' in i.text:
+                weight = i.text.replace('Вес с упаковкой', '').replace('\n', '').replace(' ', '').replace('—', '')
+                if 'кг' in weight:
+                    weight = int((float(weight.replace('кг', '').replace(',', '.')) * 1000))
+                    self.features_package_weight_list.append(weight)
+                else:
+                    weight = int(weight.replace('г', ''))
+                    self.features_package_weight_list.append(weight)
+            elif 'Размер в упаковке' in i.text:
+                string = i.text.replace('Размер в упаковке', '').replace('\n', '').replace('—', '').replace(' ', '')
+                if 'см' in string:
+                    string = string.replace('см', '')
+                    length = int(float(string.split('x')[0]) * 10)
+                    width = int(float(string.split('x')[1]) * 10)
+                    height = int(float(string.split('x')[2]) * 10)
+                    self.features_package_length_list.append(length)
+                    self.features_packing_width_list.append(width)
+                    self.features_packing_height_list.append(height)
+                else:
+                    print(f'Ошибка: в строке \n\n{i.text}\n\nв разделе размер нет см')
+            elif 'Производитель — ' in i.text:
+                manufacturer = i.text.replace('Производитель — ', '').replace(' ', '').replace('\n', '')
+                self.features_manufacturer_list.append(manufacturer)
+        if not find_colour:
+            self.features_colour_list.append('-')
+        time.sleep(3)
 
     def create_df(self):
         self.df_each_product.insert(0, 'Артикул', self.art)
@@ -695,6 +696,59 @@ class SeleniumParse:
         self.create_df()
         current_date = date.today()
         XLS().create_from_one_df(self.df_each_product, 'Товары', f'actual_parse_products_{current_date}')
+
+
+class CatalogABC:
+    def __init__(self):
+        self.url_abc = 'https://www.officemag.ru/catalog/abc/'
+
+    def get_catalog(self):
+        try:
+            r = requests.get(self.url_abc, timeout=10.5)
+            soup = BeautifulSoup(r.text, 'lxml')
+            catalog = soup.find('ul', class_='catalogAlphabetList')
+            print()
+        except Exception as exp:
+            print(exp)
+
+
+class Catalog:
+    def __init__(self, catalog_url, name):
+        self.add_url = '?SORT=SORT&COUNT=60'
+        self.catalog_url = catalog_url
+        self.name = name
+        self.save_path = f'{str(Path(__file__).parents[1])}\\officemag_parser\\result'
+        self.__main_url = 'https://www.officemag.ru/'
+        self.options = Options()
+        self.options.add_argument("--start-maximized")
+        self.service = Service('chromedriver.exe')
+
+    def start(self):
+        soup_check = ParseEachProduct().check_ban()
+        if soup_check.get('status') == 'OK':
+            if soup_check.get('city') == 'Брянск':
+                pass
+            else:
+                print(f'Выбран город {soup_check.get("city")}')
+        else:
+            print('БАН')
+
+    def set_city(self):
+        browser = webdriver.Chrome(service=self.service, options=self.options)
+        browser.get(self.__main_url)
+        city_btn = browser.find_element(By.XPATH, '/html/body/div[2]/div[1]/div/ul[2]/li[1]/a')
+        city_btn.click()
+        sleep(4)
+        br_city = browser.find_element(By.XPATH,
+                                       '//*[@id="fancybox-content"]/div/div/div/div[1]/ul[2]/li[1]/div/a')
+        br_city.click()
+        sleep(2)
+        br_city_select = browser.find_element(By.XPATH,
+                                              '//*[@id="fancybox-content"]/div/div/div/div[2]/ul[3]/li[1]/div/a')
+        br_city_select.click()
+        sleep(4)
+        ActionChains(browser).send_keys(Keys.ESCAPE).perform()
+        sleep(2)
 
 
 def parse_discont_items():
@@ -730,7 +784,7 @@ def get_each_product_from_txt():
 
 
 def main():
-    get_each_product_from_txt()
+    CatalogABC().get_catalog()
 
 
 if __name__ == '__main__':
