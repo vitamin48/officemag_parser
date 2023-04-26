@@ -3,6 +3,7 @@ import re
 from pathlib import Path
 import requests
 import time
+import ast
 from bs4 import BeautifulSoup
 import pandas as pd
 from tqdm import tqdm
@@ -30,6 +31,11 @@ class WriteFile:
 
     def write_txt_file_catalog_status(self):
         with open('result\\checked_articles.txt', 'a') as output:
+            for row in self.values:
+                output.write(str(row) + '\n')
+
+    def write_txt_articles_and_names(self):
+        with open('result\\articles_with_name_category.txt', 'a') as output:
             for row in self.values:
                 output.write(str(row) + '\n')
 
@@ -439,8 +445,9 @@ class XLS:
         writer.close()
         return path
 
-    def read_xls_to_pd(self):
-        discont_product_df = pd.read_excel(self.path_res_parse, sheet_name='Товары со скидками')
+    def read_xls_to_pd(self, path_to_file=f'{str(Path(__file__).parents[1])}\\officemag_parser\\res_parse.xlsx',
+                       sheet_name='Товары со скидками'):
+        discont_product_df = pd.read_excel(path_to_file, sheet_name=sheet_name)
         return discont_product_df
 
 
@@ -713,25 +720,16 @@ class CatalogABC:
 
 
 class Catalog:
-    def __init__(self, catalog_url, name):
-        self.add_url = '?SORT=SORT&COUNT=60'
-        self.catalog_url = catalog_url
-        self.name = name
+    def __init__(self, catalog_url_list, name_list):
+        self.add_url = '?SORT=SORT&COUNT=60&PAGEN_1='
+        self.catalog_url = catalog_url_list
+        self.name_list = name_list
+        self.res_list = []
         self.save_path = f'{str(Path(__file__).parents[1])}\\officemag_parser\\result'
-        self.__main_url = 'https://www.officemag.ru/'
+        self.__main_url = 'https://www.officemag.ru'
         self.options = Options()
         self.options.add_argument("--start-maximized")
         self.service = Service('chromedriver.exe')
-
-    def start(self):
-        soup_check = ParseEachProduct().check_ban()
-        if soup_check.get('status') == 'OK':
-            if soup_check.get('city') == 'Брянск':
-                pass
-            else:
-                print(f'Выбран город {soup_check.get("city")}')
-        else:
-            print('БАН')
 
     def set_city(self):
         browser = webdriver.Chrome(service=self.service, options=self.options)
@@ -749,6 +747,62 @@ class Catalog:
         sleep(4)
         ActionChains(browser).send_keys(Keys.ESCAPE).perform()
         sleep(2)
+        return browser
+
+    def get_soup_by_catalog_from_browser(self, browser, url_cat, page):
+        url = (self.__main_url + url_cat + self.add_url+str(page))
+        browser.get(url)
+        soup = BeautifulSoup(browser.page_source, 'lxml')
+        return soup
+
+    # def get_articles_by_soup(self, soup):
+    #     status = True
+    #     page = 1
+    #     while status:
+    #         if soup.find('div', class_='itemsNotFound'):
+    #             status = False
+    #         else:
+    #             print(f'page={page}')
+    #             page += 1
+    #             listitems = soup.findAll('li', class_='js-productListItem')
+    #             for l_it in listitems:
+    #                 str_id = listitems[l_it].attrs.get('data-ga-obj')
+    #                 id = ast.literal_eval(str_id).get('id')
+    #                 self.res_list.append(id)
+
+    def get_articles(self, browser, url_cat):
+        status = True
+        page = 1
+        while status:
+            time.sleep(1)
+            soup = self.get_soup_by_catalog_from_browser(browser, url_cat=url_cat, page=page)
+            if soup.find('div', class_='itemsNotFound'):
+                status = False
+            else:
+                print(f'page={page}')
+                page += 1
+                listitems = soup.findAll('li', class_='js-productListItem')
+                for l_it in enumerate(listitems):
+                    str_id = listitems[l_it[0]].attrs.get('data-ga-obj')
+                    id = ast.literal_eval(str_id).get('id')
+                    self.res_list.append(id)
+
+    def start(self):
+        soup_check = ParseEachProduct().check_ban()
+        if soup_check.get('status') == 'OK':
+            if soup_check.get('city') == 'Брянск':
+                pass
+            else:
+                print(f'Выбран город {soup_check.get("city")}, меняем на Брянск')
+                browser = self.set_city()
+                for i in enumerate(self.catalog_url):
+                    print(self.name_list[i[0]])
+                    self.res_list.append(self.name_list[i[0]])  # Добавляем имя категории
+                    self.get_articles(browser, url_cat=i[1])
+                    # soup = self.get_soup_by_catalog_from_browser(browser, url_cat=i[1])
+        else:
+            print('БАН')
+        return self.res_list
 
 
 def parse_discont_items():
@@ -784,7 +838,11 @@ def get_each_product_from_txt():
 
 
 def main():
-    CatalogABC().get_catalog()
+    df = XLS().read_xls_to_pd(path_to_file='input\\abc.xlsx', sheet_name='Лист1')
+    catalog_url_list = df['Каталог'].to_list()
+    name_list = df['Название'].to_list()
+    res_list = Catalog(catalog_url_list=catalog_url_list, name_list=name_list).start()
+    WriteFile(values=res_list).write_txt_articles_and_names()
 
 
 if __name__ == '__main__':
