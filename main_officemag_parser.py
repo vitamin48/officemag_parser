@@ -516,7 +516,7 @@ class SeleniumParse:
                 ActionChains(browser).send_keys(Keys.ESCAPE).perform()
                 sleep(2)
                 for art in self.articles:
-                    time.sleep(2)
+                    time.sleep(3)
                     print(art)
                     soup = BeautifulSoup(browser.page_source, 'lxml')
                     registration = soup.find('div', class_='registrationHintDescription')
@@ -750,7 +750,7 @@ class Catalog:
         return browser
 
     def get_soup_by_catalog_from_browser(self, browser, url_cat, page):
-        url = (self.__main_url + url_cat + self.add_url+str(page))
+        url = (self.__main_url + url_cat + self.add_url + str(page))
         browser.get(url)
         soup = BeautifulSoup(browser.page_source, 'lxml')
         return soup
@@ -776,7 +776,7 @@ class Catalog:
         while status:
             time.sleep(1)
             soup = self.get_soup_by_catalog_from_browser(browser, url_cat=url_cat, page=page)
-            if soup.find('div', class_='itemsNotFound'):
+            if soup.find('div', class_='itemsNotFound') or soup.find('div', class_='registrationHintDescription'):
                 status = False
             else:
                 print(f'page={page}')
@@ -837,12 +837,18 @@ def get_each_product_from_txt():
     SeleniumParse(articles_with_catalog, arts).start()
 
 
-def main():
+def get_articles_by_catalog():
+    """Получаем из ссылки с каталогом список артикулов на странице, затем идет перебор страниц.
+    На вход: файл abc.xls, на выходе: articles_with_name_category"""
     df = XLS().read_xls_to_pd(path_to_file='input\\abc.xlsx', sheet_name='Лист1')
     catalog_url_list = df['Каталог'].to_list()
     name_list = df['Название'].to_list()
     res_list = Catalog(catalog_url_list=catalog_url_list, name_list=name_list).start()
     WriteFile(values=res_list).write_txt_articles_and_names()
+
+
+def main():
+    get_each_product_from_txt()
 
 
 if __name__ == '__main__':
