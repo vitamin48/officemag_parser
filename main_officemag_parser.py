@@ -259,31 +259,34 @@ class ParseEachProduct:
             print(f'Ошибка при запросе: {r.code}')
             return {'status': 'error'}
 
-    def check_ban_and_proxy(self, proxies=''):
+    def check_ban_and_proxy(self, baned_proxy):
         """Проверка на бан и прокси возврат текущего города"""
         with open('input\\proxy_file_checked.txt', 'r') as proxy_file:
             proxy_list = proxy_file.readlines()
         for proxy in proxy_list:
             proxy = proxy.split('\n')[0]
-            try:
-                res = requests.get('https://ipinfo.io/json', proxies={'https': proxy}, timeout=3)
-                print(f'{proxy} + \n{res.text}')
-                if res.status_code == 200:
-                    r = requests.get(f'{self.__main_url}')
-                    if r.status_code == 200:
-                        soup = BeautifulSoup(r.text, 'lxml')
-                        registration = soup.find('div', class_='registrationHintDescription')
-                        city = ParseEachProduct().get_current_city(soup)
-                        if registration:
-                            print('БАН')
-                            return {'status': 'ban'}
+            if proxy in baned_proxy:
+                continue
+            else:
+                try:
+                    res = requests.get('https://ipinfo.io/json', proxies={'https': proxy}, timeout=3)
+                    print(f'{proxy} + \n{res.text}')
+                    if res.status_code == 200:
+                        r = requests.get(f'{self.__main_url}')
+                        if r.status_code == 200:
+                            soup = BeautifulSoup(r.text, 'lxml')
+                            registration = soup.find('div', class_='registrationHintDescription')
+                            city = ParseEachProduct().get_current_city(soup)
+                            if registration:
+                                print('БАН')
+                                return {'status': 'ban'}
+                            else:
+                                return {'status': 'OK', 'city': city, 'proxy': proxy}
                         else:
-                            return {'status': 'OK', 'city': city, 'proxy': proxy}
-                    else:
-                        print(f'Ошибка при запросе: {r.status_code}')
-                        return {'status': 'error'}
-            except Exception as exp:
-                print(f'{proxy} - Exception: {exp}')
+                            print(f'Ошибка при запросе: {r.status_code}')
+                            return {'status': 'error'}
+                except Exception as exp:
+                    print(f'{proxy} - Exception: {exp}')
 
         print('Все прокси недоступны')
         print()
@@ -467,10 +470,10 @@ class XLS:
             col_idx = df.columns.get_loc(column)
             writer.sheets[f'{sheet}'].set_column(col_idx, col_idx, column_width)
         writer.sheets[sheet].set_column(1, 1, 30)
-        writer.sheets[sheet].set_column(7, 7, 30)
-        writer.sheets[sheet].set_column(14, 14, 30)
+        writer.sheets[sheet].set_column(8, 8, 30)
         writer.sheets[sheet].set_column(15, 15, 30)
         writer.sheets[sheet].set_column(16, 16, 30)
+        writer.sheets[sheet].set_column(17, 17, 30)
         writer.close()
         return path
 
@@ -489,12 +492,15 @@ class SeleniumParse:
         self.service = Service('chromedriver.exe')
         # self.browser = webdriver.Chrome(service=self.service, options=self.options)
         self.soup_list = []
-        self.articles = articles_with_catalog
-        self.art = arts
+        self.articles_with_catalog = articles_with_catalog
+        self.arts = arts
+        self.baned_proxy = []
         self.bad_brand_list = ['Lavazza', 'BRAUBERG', 'DURACELL', 'SYNERGETIC', 'FRESCO', 'SONNEN']
         self.df_each_product = pd.DataFrame()
 
+        self.result_arts = []
         self.product_name = []  # Название товара
+        self.brand = []
         self.description_list = []  # описание
         self.features_colour_list = []  # цвет
         self.features_package_weight_list = []  # вес в упаковке
@@ -509,101 +515,85 @@ class SeleniumParse:
         self.krasnoarmeyskaya_list = []
         self.sovetskaya_list = []
 
-    def set_city_and_get_data(self, proxy):
-        soup_check = ParseEachProduct().check_ban_and_proxy()
+    def set_city_and_get_data(self):
+        soup_check = ParseEachProduct().check_ban_and_proxy(baned_proxy=self.baned_proxy)
         if soup_check.get('status') == 'OK':
-            if soup_check.get('city') == 'Брянск':
-                for art in self.articles:
-                    print(art)
-                    soup = ParseEachProduct().get_soup(art)
-                    registration = soup.find('div', class_='registrationHintDescription')
-                    if registration:
-                        # print(f'БАН {art}')
-                        return {'status': 'БАН', 'last art': art}
-                    city = ParseEachProduct().get_current_city(soup)
-                    # if city == 'Брянск':
-                    #     print('Брянск')
-                    #     self.check_attr_by_soup(soup, art)
-                    # else:
-                    #     self.set_city_and_get_data()
-                return {'status': 'OK'}
-            else:
-                self.options.add_argument(f"--proxy-server={soup_check.get('proxy')}")
-                #self.options.add_argument(f"--proxy-server={proxy}")
-                browser = webdriver.Chrome(service=self.service, options=self.options)
-                browser.get('https://ipinfo.io/json')
-                browser.get(self.__main_url)
-                # city_btn = self.browser.find_element(By.XPATH, '/html/body/div[2]/div[2]/a[2]')
-                city_btn = browser.find_element(By.XPATH, '/html/body/div[2]/div[1]/div/ul[2]/li[1]/a')
-                city_btn.click()
-                sleep(4)
-                br_city = browser.find_element(By.XPATH,
-                                               '//*[@id="fancybox-content"]/div/div/div/div[1]/ul[2]/li[1]/div/a')
-                br_city.click()
-                sleep(2)
-                br_city_select = browser.find_element(By.XPATH,
-                                                      '//*[@id="fancybox-content"]/div/div/div/div[2]/ul[3]/li[1]/div/a')
-                br_city_select.click()
-                sleep(4)
-                ActionChains(browser).send_keys(Keys.ESCAPE).perform()
-                sleep(2)
-                for art in self.articles:
-                    time.sleep(3)
-                    print(art)
-                    soup = BeautifulSoup(browser.page_source, 'lxml')
-                    registration = soup.find('div', class_='registrationHintDescription')
-                    if registration:
-                        print('БАН')
-                        return {'status': 'БАН', 'last art': art}
-                    city = ParseEachProduct().get_current_city(soup)
-                    # if city == 'Брянск':
-                    #     # print('Брянск')
-                    #     browser.get(self.__main_url + art)
-                    #     soup = BeautifulSoup(browser.page_source, 'lxml')
-                    #     self.check_attr_by_soup(soup, art)
-                    # else:
-                    #     self.set_city_and_get_data()
-                # browser.close()
-                return {'status': 'OK'}
+            self.options.add_argument(f"--proxy-server={soup_check.get('proxy')}")
+            # self.options.add_argument(f"--proxy-server={proxy}")
+            browser = webdriver.Chrome(service=self.service, options=self.options)
+            browser.get('https://ipinfo.io/json')
+            browser.get(self.__main_url)
+            # city_btn = self.browser.find_element(By.XPATH, '/html/body/div[2]/div[2]/a[2]')
+            city_btn = browser.find_element(By.XPATH, '/html/body/div[2]/div[1]/div/ul[2]/li[1]/a')
+            city_btn.click()
+            sleep(4)
+            br_city = browser.find_element(By.XPATH,
+                                           '//*[@id="fancybox-content"]/div/div/div/div[1]/ul[2]/li[1]/div/a')
+            br_city.click()
+            sleep(2)
+            br_city_select = browser.find_element(By.XPATH,
+                                                  '//*[@id="fancybox-content"]/div/div/div/div[2]/ul[3]/li[1]/div/a')
+            br_city_select.click()
+            sleep(4)
+            ActionChains(browser).send_keys(Keys.ESCAPE).perform()
+            sleep(2)
+            for art in self.articles_with_catalog:
+                browser.get(self.__main_url + art)
+                soup = BeautifulSoup(browser.page_source, 'lxml')
+                registration = soup.find('div', class_='registrationHintDescription')
+                if registration:
+                    print(f'БАН! Крайний артикул: {art}')
+                    browser.close()
+                    browser.quit()
+                    return {'status': 'БАН', 'last_art': art, 'baned_proxy': soup_check.get('proxy')}
+                current_art = f'goods_{art[14:]}'
+                self.check_attr_by_soup(soup, current_art)
+                # time.sleep(3)
+                print(art)
+
+            # browser.close()
+            return {'status': 'OK'}
         elif soup_check.get('status') == 'ban':
             print('БАН на старте')
-            return {'status': 'БАН', 'last art': 0}
+            return {'status': 'БАН', 'last art': 0, 'baned_proxy': 0}
 
     def add_empty_row(self):
         """Добавляем пустую строку"""
         pass
 
-    def check_attr_by_soup(self, soup, art):
+    def check_attr_by_soup(self, soup, current_art):
         check_list = []
-        current_art = f'goods_{art.split("/")[-1]}'
+        # current_art = f'goods_{art.split("/")[-1]}'
         if soup.find('div', class_='ProductState ProductState--red'):
             red_product_state = soup.find('div', class_='ProductState ProductState--red').text
             if red_product_state == 'Недоступен к\xa0заказу':
                 check_list.append('-')
-                print('Товар недоступен к заказу')
+                print(f'Товар {current_art} недоступен к заказу')
         else:
             check_list.append('+')
         if any(ext.lower() in soup.find('div', class_='Product__name').text.lower() for ext in self.bad_brand_list):
             check_list.append('-')
-            print('Товар из списка нежелательных брэндов')
+            print(f'Товар {current_art} из списка нежелательных брэндов')
         else:
             check_list.append('+')
-        if soup.find('div', class_='ProductState ProductState--gray'):
-            min_count_str = soup.find('div', class_='ProductState ProductState--gray').text
-            min_count = int(re.findall(r'\d+', min_count_str)[0])
-            if min_count > 1:
-                check_list.append('-')
-                print(f'Минимальная партия более 1, а именно: {min_count}')
-            else:
-                check_list.append('+')
+        # if soup.find('div', class_='ProductState ProductState--gray'):
+        #     min_count_str = soup.find('div', class_='ProductState ProductState--gray').text
+        #     min_count = int(re.findall(r'\d+', min_count_str)[0])
+        #     if min_count > 1:
+        #         check_list.append('-')
+        #         print(f'Минимальная партия более 1, а именно: {min_count}')
+        #     else:
+        #         check_list.append('+')
         if '-' not in check_list:
-            print('+')
+            print(f'Товар {current_art} проходит фильтры +')
+            self.result_arts.append(current_art)
             self.get_attr_by_soup(soup)
-        else:
-            self.art.remove(current_art)
 
     def get_attr_by_soup(self, soup):
         self.soup_list.append(soup)
+        iteminfodetails = soup.find('div', class_='itemInfoDetails group')
+        brand = json.loads(iteminfodetails.attrs['data-ga-obj']).get('brand')
+        self.brand.append(brand)
         name = soup.find('div', class_='Product__name').text
         self.product_name.append(name)
         if soup.find('span', class_='Price Price--best'):
@@ -708,10 +698,10 @@ class SeleniumParse:
                 self.features_manufacturer_list.append(manufacturer)
         if not find_colour:
             self.features_colour_list.append('-')
-        time.sleep(3)
+        # time.sleep(3)
 
     def create_df(self):
-        self.df_each_product.insert(0, 'Артикул', self.art)
+        self.df_each_product.insert(0, 'Артикул', self.result_arts)
         self.df_each_product.insert(1, 'Название', self.product_name)
         self.df_each_product.insert(2, 'Цена ОФИСМАГ', self.price_discount_list)
         self.df_each_product.insert(3, 'Цена для OZON', [390 if x * 3 < 390 else round(x * 3) for x
@@ -720,21 +710,23 @@ class SeleniumParse:
                                                          for i in range(len(self.krasnoarmeyskaya_list))])
         self.df_each_product.insert(5, 'Остаток на Советской', self.sovetskaya_list)
         self.df_each_product.insert(6, 'Остаток на Красноармейской', self.krasnoarmeyskaya_list)
-        self.df_each_product.insert(7, 'Описание', self.description_list)
-        self.df_each_product.insert(8, 'Цвет', self.features_colour_list)
-        self.df_each_product.insert(9, 'Вес в упаковке (г)', self.features_package_weight_list)
-        self.df_each_product.insert(10, 'Ширина в упаковке (мм)', self.features_packing_width_list)
-        self.df_each_product.insert(11, 'Высота упаковки (мм)', self.features_packing_height_list)
-        self.df_each_product.insert(12, 'Длина упаковки (мм)', self.features_package_length_list)
-        self.df_each_product.insert(13, 'Производитель', self.features_manufacturer_list)
-        self.df_each_product.insert(14, 'Ссылка на главное фото товара', self.url_main_img_add_list)
-        self.df_each_product.insert(15, 'Ссылки на фото товара', self.url_img_add_list)
-        self.df_each_product.insert(16, 'Ссылка на видео товара', self.video_lst)
+        self.df_each_product.insert(7, 'Брэнд', self.brand)
+        self.df_each_product.insert(8, 'Описание', self.description_list)
+        self.df_each_product.insert(9, 'Цвет', self.features_colour_list)
+        self.df_each_product.insert(10, 'Вес в упаковке (г)', self.features_package_weight_list)
+        self.df_each_product.insert(11, 'Ширина в упаковке (мм)', self.features_packing_width_list)
+        self.df_each_product.insert(12, 'Высота упаковки (мм)', self.features_packing_height_list)
+        self.df_each_product.insert(13, 'Длина упаковки (мм)', self.features_package_length_list)
+        self.df_each_product.insert(14, 'Производитель', self.features_manufacturer_list)
+        self.df_each_product.insert(15, 'Ссылка на главное фото товара', self.url_main_img_add_list)
+        self.df_each_product.insert(16, 'Ссылки на фото товара', self.url_img_add_list)
+        self.df_each_product.insert(17, 'Ссылка на видео товара', self.video_lst)
 
-    def start(self):
-        data = self.set_city_and_get_data(proxy='142.202.48.131:3128')
+    def start(self, last_art=''):
+        data = self.set_city_and_get_data()
         if data.get('status') == 'БАН':
-            print('vty')
+            self.baned_proxy.append(data.get('baned_proxy'))
+            self.start()
         else:
             self.create_df()
             current_date = date.today()
