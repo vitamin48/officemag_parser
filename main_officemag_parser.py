@@ -259,6 +259,35 @@ class ParseEachProduct:
             print(f'Ошибка при запросе: {r.code}')
             return {'status': 'error'}
 
+    def check_ban_and_proxy(self, proxies=''):
+        """Проверка на бан и прокси возврат текущего города"""
+        with open('input\\proxy_file_checked.txt', 'r') as proxy_file:
+            proxy_list = proxy_file.readlines()
+        for proxy in proxy_list:
+            proxy = proxy.split('\n')[0]
+            try:
+                res = requests.get('https://ipinfo.io/json', proxies={'https': proxy}, timeout=3)
+                print(f'{proxy} + \n{res.text}')
+                if res.status_code == 200:
+                    r = requests.get(f'{self.__main_url}')
+                    if r.status_code == 200:
+                        soup = BeautifulSoup(r.text, 'lxml')
+                        registration = soup.find('div', class_='registrationHintDescription')
+                        city = ParseEachProduct().get_current_city(soup)
+                        if registration:
+                            print('БАН')
+                            return {'status': 'ban'}
+                        else:
+                            return {'status': 'OK', 'city': city, 'proxy': proxy}
+                    else:
+                        print(f'Ошибка при запросе: {r.status_code}')
+                        return {'status': 'error'}
+            except Exception as exp:
+                print(f'{proxy} - Exception: {exp}')
+
+        print('Все прокси недоступны')
+        print()
+
     def get_current_city(self, soup):
         """Находим выбранный город"""
         try:
@@ -480,8 +509,8 @@ class SeleniumParse:
         self.krasnoarmeyskaya_list = []
         self.sovetskaya_list = []
 
-    def set_city_and_get_data(self):
-        soup_check = ParseEachProduct().check_ban()
+    def set_city_and_get_data(self, proxy):
+        soup_check = ParseEachProduct().check_ban_and_proxy()
         if soup_check.get('status') == 'OK':
             if soup_check.get('city') == 'Брянск':
                 for art in self.articles:
@@ -492,14 +521,17 @@ class SeleniumParse:
                         # print(f'БАН {art}')
                         return {'status': 'БАН', 'last art': art}
                     city = ParseEachProduct().get_current_city(soup)
-                    if city == 'Брянск':
-                        print('Брянск')
-                        self.check_attr_by_soup(soup, art)
-                    else:
-                        self.set_city_and_get_data()
+                    # if city == 'Брянск':
+                    #     print('Брянск')
+                    #     self.check_attr_by_soup(soup, art)
+                    # else:
+                    #     self.set_city_and_get_data()
                 return {'status': 'OK'}
             else:
+                self.options.add_argument(f"--proxy-server={soup_check.get('proxy')}")
+                #self.options.add_argument(f"--proxy-server={proxy}")
                 browser = webdriver.Chrome(service=self.service, options=self.options)
+                browser.get('https://ipinfo.io/json')
                 browser.get(self.__main_url)
                 # city_btn = self.browser.find_element(By.XPATH, '/html/body/div[2]/div[2]/a[2]')
                 city_btn = browser.find_element(By.XPATH, '/html/body/div[2]/div[1]/div/ul[2]/li[1]/a')
@@ -524,17 +556,18 @@ class SeleniumParse:
                         print('БАН')
                         return {'status': 'БАН', 'last art': art}
                     city = ParseEachProduct().get_current_city(soup)
-                    if city == 'Брянск':
-                        # print('Брянск')
-                        browser.get(self.__main_url + art)
-                        soup = BeautifulSoup(browser.page_source, 'lxml')
-                        self.check_attr_by_soup(soup, art)
-                    else:
-                        self.set_city_and_get_data()
+                    # if city == 'Брянск':
+                    #     # print('Брянск')
+                    #     browser.get(self.__main_url + art)
+                    #     soup = BeautifulSoup(browser.page_source, 'lxml')
+                    #     self.check_attr_by_soup(soup, art)
+                    # else:
+                    #     self.set_city_and_get_data()
                 # browser.close()
                 return {'status': 'OK'}
         elif soup_check.get('status') == 'ban':
-            print()
+            print('БАН на старте')
+            return {'status': 'БАН', 'last art': 0}
 
     def add_empty_row(self):
         """Добавляем пустую строку"""
@@ -699,10 +732,13 @@ class SeleniumParse:
         self.df_each_product.insert(16, 'Ссылка на видео товара', self.video_lst)
 
     def start(self):
-        self.set_city_and_get_data()
-        self.create_df()
-        current_date = date.today()
-        XLS().create_from_one_df(self.df_each_product, 'Товары', f'actual_parse_products_{current_date}')
+        data = self.set_city_and_get_data(proxy='142.202.48.131:3128')
+        if data.get('status') == 'БАН':
+            print('vty')
+        else:
+            self.create_df()
+            current_date = date.today()
+            XLS().create_from_one_df(self.df_each_product, 'Товары', f'actual_parse_products_{current_date}')
 
 
 class CatalogABC:
