@@ -495,7 +495,7 @@ class SeleniumParse:
         self.articles_with_catalog = articles_with_catalog
         self.arts = arts
         self.baned_proxy = []
-        self.bad_brand_list = ['Lavazza', 'BRAUBERG', 'DURACELL', 'SYNERGETIC', 'FRESCO', 'SONNEN']
+        self.bad_brand_list = ['Lavazza', 'BRAUBERG', 'DURACELL', 'SYNERGETIC', 'SONNEN', 'JACOBS']
         self.df_each_product = pd.DataFrame()
 
         self.result_arts = []
