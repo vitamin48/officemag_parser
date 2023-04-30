@@ -8,6 +8,7 @@ from bs4 import BeautifulSoup
 import pandas as pd
 from tqdm import tqdm
 from datetime import date
+import urllib
 
 from urllib.request import urlopen as uReq
 import json
@@ -289,7 +290,8 @@ class ParseEachProduct:
                     print(f'{proxy} - Exception: {exp}')
 
         print('Все прокси недоступны')
-        print()
+        return {'status': 'Все прокси недоступны'}
+
 
     def get_current_city(self, soup):
         """Находим выбранный город"""
@@ -496,6 +498,7 @@ class SeleniumParse:
         self.arts = arts
         self.baned_proxy = []
         self.bad_brand_list = ['Lavazza', 'BRAUBERG', 'DURACELL', 'SYNERGETIC', 'SONNEN', 'JACOBS']
+        self.remove_from_description = ['в нашем интернет-магазине']
         self.df_each_product = pd.DataFrame()
 
         self.result_arts = []
@@ -556,6 +559,8 @@ class SeleniumParse:
         elif soup_check.get('status') == 'ban':
             print('БАН на старте')
             return {'status': 'БАН', 'last art': 0, 'baned_proxy': 0}
+        elif soup_check.get('status') == 'Все прокси недоступны':
+            return {'status': 'Все прокси недоступны', 'last art': 0, 'baned_proxy': 0}
 
     def add_empty_row(self):
         """Добавляем пустую строку"""
@@ -638,6 +643,9 @@ class SeleniumParse:
         tabscontent = soup.find('div',
                                 class_='tabsContent js-tabsContent js-tabsContentMobile')  # общая таблица внизу
         description = tabscontent.find('div', class_='infoDescription').text.replace('\nОписание\n\n', '')
+        description_split = description.split('.')
+        if any(ext.lower() in description_split for ext in self.remove_from_description):
+            print('remove_from_description')
         self.description_list.append(description)
         shops = tabscontent.find('div', class_='tabsContent__item pickup'). \
             find('table', class_='AvailabilityList AvailabilityList--dotted'). \
@@ -727,6 +735,11 @@ class SeleniumParse:
         if data.get('status') == 'БАН':
             self.baned_proxy.append(data.get('baned_proxy'))
             self.start()
+        elif data.get('status') == 'Все прокси недоступны':
+            if self.result_arts:
+                self.create_df()
+                current_date = date.today()
+                XLS().create_from_one_df(self.df_each_product, 'Товары', f'actual_parse_products_{current_date}')
         else:
             self.create_df()
             current_date = date.today()
