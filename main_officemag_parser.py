@@ -500,7 +500,7 @@ class SeleniumParse:
         self.arts = arts
         self.baned_proxy = []
         self.bad_brand_list = ['Lavazza', 'BRAUBERG', 'DURACELL', 'SYNERGETIC', 'SONNEN', 'JACOBS']
-        self.remove_from_description = ['в нашем интернет-магазине']
+        self.remove_from_description = ['в нашем интернет-магазине', 'у нас на сайте']
         self.update_arts = []
         self.df_each_product = pd.DataFrame()
 
@@ -549,25 +549,35 @@ class SeleniumParse:
                     continue
                 else:
                     if re.search(r'\d{3}', art):
-                        browser.get(self.__main_url + art)
-                        soup = BeautifulSoup(browser.page_source, 'lxml')
-                        registration = soup.find('div', class_='registrationHintDescription')
-                        if registration:
-                            print(f'БАН! Крайний артикул: {art}')
+                        try:
+                            browser.get(self.__main_url + art)
+                            soup = BeautifulSoup(browser.page_source, 'lxml')
+                            registration = soup.find('div', class_='registrationHintDescription')
+                            if registration:
+                                print(f'БАН! Крайний артикул: {art}')
+                                browser.close()
+                                browser.quit()
+                                if soup_check.get('proxy') == '':
+                                    return {'status': 'БАН', 'last_art': art[14:], 'baned_proxy': 'WITHOUT_PROXY'}
+                                else:
+                                    return {'status': 'БАН', 'last_art': art[14:],
+                                            'baned_proxy': soup_check.get('proxy')}
+                            current_art = f'goods_{art[14:]}'
+                            self.update_arts.append(art)
+                            self.check_attr_by_soup(soup, current_art)
+                            time.sleep(0.5)
+                            print(art)
+                        except Exception as exp:
+                            print(f'Прокси: {soup_check.get("proxy")} перестал отвечать во время работы.')
                             browser.close()
                             browser.quit()
                             if soup_check.get('proxy') == '':
                                 return {'status': 'БАН', 'last_art': art[14:], 'baned_proxy': 'WITHOUT_PROXY'}
                             else:
-                                return {'status': 'БАН', 'last_art': art[14:], 'baned_proxy': soup_check.get('proxy')}
-                        current_art = f'goods_{art[14:]}'
-                        self.update_arts.append(art)
-                        self.check_attr_by_soup(soup, current_art)
-                        time.sleep(0.5)
-                        print(art)
+                                return {'status': 'БАН', 'last_art': art[14:],
+                                        'baned_proxy': soup_check.get('proxy')}
                     else:
-                        pass
-                        # print(art[14:])
+                        print(art[14:])
 
             # browser.close()
             return {'status': 'OK', 'last_art': self.articles_with_catalog[-1]}
@@ -598,11 +608,14 @@ class SeleniumParse:
                 print(f'Товар {current_art} недоступен к заказу')
         else:
             check_list.append('+')
-        if any(ext.lower() in soup.find('div', class_='Product__name').text.lower() for ext in self.bad_brand_list):
-            check_list.append('-')
-            print(f'Товар {current_art} из списка нежелательных брэндов')
+        if soup.find('div', class_='Product__name'):
+            if any(ext.lower() in soup.find('div', class_='Product__name').text.lower() for ext in self.bad_brand_list):
+                check_list.append('-')
+                print(f'Товар {current_art} из списка нежелательных брэндов')
+            else:
+                check_list.append('+')
         else:
-            check_list.append('+')
+            print()
         # if soup.find('div', class_='ProductState ProductState--gray'):
         #     min_count_str = soup.find('div', class_='ProductState ProductState--gray').text
         #     min_count = int(re.findall(r'\d+', min_count_str)[0])
