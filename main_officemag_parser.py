@@ -269,6 +269,8 @@ class ParseEachProduct:
             if proxy in baned_proxy:
                 continue
             else:
+                if proxy == 'WITHOUT_PROXY':
+                    proxy = ''
                 try:
                     res = requests.get('https://ipinfo.io/json', proxies={'https': proxy}, timeout=3)
                     print(f'{proxy} + \n{res.text}')
@@ -280,7 +282,7 @@ class ParseEachProduct:
                             city = ParseEachProduct().get_current_city(soup)
                             if registration:
                                 print('БАН')
-                                return {'status': 'ban'}
+                                return {'status': 'ban', 'proxy': proxy}
                             else:
                                 return {'status': 'OK', 'city': city, 'proxy': proxy}
                         else:
@@ -291,7 +293,6 @@ class ParseEachProduct:
 
         print('Все прокси недоступны')
         return {'status': 'Все прокси недоступны'}
-
 
     def get_current_city(self, soup):
         """Находим выбранный город"""
@@ -431,7 +432,7 @@ class ParseEachProduct:
                 print()
             if not find_colour:
                 features_colour_list.append('-')
-            time.sleep(3)
+            time.sleep(2)
             print()
 
         df_each_product = pd.DataFrame()
@@ -452,7 +453,7 @@ class ParseEachProduct:
         df_each_product.insert(13, 'Производитель', features_manufacturer_list)
         df_each_product.insert(14, 'Ссылка на главное фото товара', url_main_img_add_list)
         df_each_product.insert(15, 'Ссылки на фото товара', url_img_add_list)
-        df_each_product.insert(16, 'Ссылка на видео товара', video_lst)
+        # df_each_product.insert(16, 'Ссылка на видео товара', video_lst)
         XLS().create_from_one_df(df_each_product, 'Товары', 'res_parse_product')
 
 
@@ -473,9 +474,10 @@ class XLS:
             writer.sheets[f'{sheet}'].set_column(col_idx, col_idx, column_width)
         writer.sheets[sheet].set_column(1, 1, 30)
         writer.sheets[sheet].set_column(8, 8, 30)
+        writer.sheets[sheet].set_column(9, 9, 30)
         writer.sheets[sheet].set_column(15, 15, 30)
         writer.sheets[sheet].set_column(16, 16, 30)
-        writer.sheets[sheet].set_column(17, 17, 30)
+        # writer.sheets[sheet].set_column(17, 17, 30)
         writer.close()
         return path
 
@@ -499,6 +501,7 @@ class SeleniumParse:
         self.baned_proxy = []
         self.bad_brand_list = ['Lavazza', 'BRAUBERG', 'DURACELL', 'SYNERGETIC', 'SONNEN', 'JACOBS']
         self.remove_from_description = ['в нашем интернет-магазине']
+        self.update_arts = []
         self.df_each_product = pd.DataFrame()
 
         self.result_arts = []
@@ -522,6 +525,7 @@ class SeleniumParse:
         soup_check = ParseEachProduct().check_ban_and_proxy(baned_proxy=self.baned_proxy)
         if soup_check.get('status') == 'OK':
             self.options.add_argument(f"--proxy-server={soup_check.get('proxy')}")
+            self.options.add_argument('--blink-settings=imagesEnabled=false')
             # self.options.add_argument(f"--proxy-server={proxy}")
             browser = webdriver.Chrome(service=self.service, options=self.options)
             browser.get('https://ipinfo.io/json')
@@ -541,26 +545,44 @@ class SeleniumParse:
             ActionChains(browser).send_keys(Keys.ESCAPE).perform()
             sleep(2)
             for art in self.articles_with_catalog:
-                browser.get(self.__main_url + art)
-                soup = BeautifulSoup(browser.page_source, 'lxml')
-                registration = soup.find('div', class_='registrationHintDescription')
-                if registration:
-                    print(f'БАН! Крайний артикул: {art}')
-                    browser.close()
-                    browser.quit()
-                    return {'status': 'БАН', 'last_art': art, 'baned_proxy': soup_check.get('proxy')}
-                current_art = f'goods_{art[14:]}'
-                self.check_attr_by_soup(soup, current_art)
-                # time.sleep(3)
-                print(art)
+                if art in self.update_arts:
+                    continue
+                else:
+                    if re.search(r'\d{3}', art):
+                        browser.get(self.__main_url + art)
+                        soup = BeautifulSoup(browser.page_source, 'lxml')
+                        registration = soup.find('div', class_='registrationHintDescription')
+                        if registration:
+                            print(f'БАН! Крайний артикул: {art}')
+                            browser.close()
+                            browser.quit()
+                            if soup_check.get('proxy') == '':
+                                return {'status': 'БАН', 'last_art': art[14:], 'baned_proxy': 'WITHOUT_PROXY'}
+                            else:
+                                return {'status': 'БАН', 'last_art': art[14:], 'baned_proxy': soup_check.get('proxy')}
+                        current_art = f'goods_{art[14:]}'
+                        self.update_arts.append(art)
+                        self.check_attr_by_soup(soup, current_art)
+                        time.sleep(0.5)
+                        print(art)
+                    else:
+                        pass
+                        # print(art[14:])
 
             # browser.close()
-            return {'status': 'OK'}
+            return {'status': 'OK', 'last_art': self.articles_with_catalog[-1]}
         elif soup_check.get('status') == 'ban':
             print('БАН на старте')
-            return {'status': 'БАН', 'last art': 0, 'baned_proxy': 0}
+            if self.update_arts:
+                return {'status': 'БАН', 'last_art': self.update_arts[-1][14:], 'baned_proxy': soup_check.get('proxy')}
+            else:
+                return {'status': 'БАН', 'last_art': 0, 'baned_proxy': soup_check.get('proxy')}
         elif soup_check.get('status') == 'Все прокси недоступны':
-            return {'status': 'Все прокси недоступны', 'last art': 0, 'baned_proxy': 0}
+            if self.update_arts:
+                return {'status': 'Все прокси недоступны', 'last_art': self.update_arts,
+                        'baned_proxy': soup_check.get('proxy')}
+            else:
+                return {'status': 'Все прокси недоступны', 'last_art': 0, 'baned_proxy': 0}
 
     def add_empty_row(self):
         """Добавляем пустую строку"""
@@ -644,9 +666,12 @@ class SeleniumParse:
                                 class_='tabsContent js-tabsContent js-tabsContentMobile')  # общая таблица внизу
         description = tabscontent.find('div', class_='infoDescription').text.replace('\nОписание\n\n', '')
         description_split = description.split('.')
-        if any(ext.lower() in description_split for ext in self.remove_from_description):
-            print('remove_from_description')
-        self.description_list.append(description)
+        for d in description_split:
+            for r in self.remove_from_description:
+                if r in d:
+                    description_split.remove(d)
+        description_result = '.'.join(description_split)
+        self.description_list.append(description_result)
         shops = tabscontent.find('div', class_='tabsContent__item pickup'). \
             find('table', class_='AvailabilityList AvailabilityList--dotted'). \
             findAll('td', 'AvailabilityBox')
@@ -728,22 +753,33 @@ class SeleniumParse:
         self.df_each_product.insert(14, 'Производитель', self.features_manufacturer_list)
         self.df_each_product.insert(15, 'Ссылка на главное фото товара', self.url_main_img_add_list)
         self.df_each_product.insert(16, 'Ссылки на фото товара', self.url_img_add_list)
-        self.df_each_product.insert(17, 'Ссылка на видео товара', self.video_lst)
+        # self.df_each_product.insert(17, 'Ссылка на видео товара', self.video_lst)
 
-    def start(self, last_art=''):
+    def start(self):
         data = self.set_city_and_get_data()
-        if data.get('status') == 'БАН':
+        if data.get('status') == 'БАН' and data.get('baned_proxy') == '':
+            self.baned_proxy.append('WITHOUT_PROXY')
+            self.start()
+        elif data.get('status') == 'БАН':
             self.baned_proxy.append(data.get('baned_proxy'))
             self.start()
-        elif data.get('status') == 'Все прокси недоступны':
+        elif data.get('status') == 'Все прокси недоступны' and data.get('last_art') == 0:
+            print('Парс ни разу не отработал')
+        elif data.get('status') == 'Все прокси недоступны' and data.get('last_art') != 0:
+            first_art = self.articles_with_catalog[0][14:]
+            last_art = data.get("last_art")[-1][14:]
             if self.result_arts:
                 self.create_df()
                 current_date = date.today()
-                XLS().create_from_one_df(self.df_each_product, 'Товары', f'actual_parse_products_{current_date}')
-        else:
+                XLS().create_from_one_df(self.df_each_product, 'Товары',
+                                         f'update_arts_{first_art}_{last_art}_{current_date}')
+        elif data.get('status') == 'OK':
+            first_art = self.articles_with_catalog[0][14:]
+            last_art = data.get("last_art")[14:]
             self.create_df()
             current_date = date.today()
-            XLS().create_from_one_df(self.df_each_product, 'Товары', f'actual_parse_products_{current_date}')
+            XLS().create_from_one_df(self.df_each_product, 'Товары',
+                                     f'update_arts_{first_art}_{last_art}_{current_date}')
 
 
 class CatalogABC:
@@ -872,7 +908,7 @@ def parse_actual_goods():
 
 def get_each_product_from_txt():
     """Актуализация остатков из файла txt. На выходе полная таблица xls."""
-    with open('input\\articles_for_updating.txt', 'r') as file:
+    with open('input\\articles_for_updating.txt', 'r', encoding="utf-8") as file:
         articles_with_catalog = [f'catalog/goods/{line.rstrip()}' for line in file]  # 'catalog/goods/621130'
         arts = [f'goods_{x[14:]}' for x in articles_with_catalog]  # 'goods_621130'
     SeleniumParse(articles_with_catalog, arts).start()
