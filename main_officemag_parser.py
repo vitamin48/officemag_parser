@@ -501,7 +501,7 @@ class SeleniumParse:
         self.baned_proxy = []
         self.bad_brand_list = ['Lavazza', 'BRAUBERG', 'DURACELL', 'SYNERGETIC', 'SONNEN', 'JACOBS']
         self.remove_from_description = ['в нашем интернет-магазине', 'у нас на сайте']
-        self.update_arts = []
+        self.update_arts = []  # список отработанных артикулов
         self.df_each_product = pd.DataFrame()
 
         self.result_arts = []
@@ -528,33 +528,48 @@ class SeleniumParse:
             self.options.add_argument('--blink-settings=imagesEnabled=false')
             # self.options.add_argument(f"--proxy-server={proxy}")
             browser = webdriver.Chrome(service=self.service, options=self.options)
-            browser.get('https://ipinfo.io/json')
-            browser.get(self.__main_url)
-            # city_btn = self.browser.find_element(By.XPATH, '/html/body/div[2]/div[2]/a[2]')
-            city_btn = browser.find_element(By.XPATH, '/html/body/div[2]/div[1]/div/ul[2]/li[1]/a')
-            city_btn.click()
-            sleep(4)
-            br_city = browser.find_element(By.XPATH,
-                                           '//*[@id="fancybox-content"]/div/div/div/div[1]/ul[2]/li[1]/div/a')
-            br_city.click()
-            sleep(2)
-            br_city_select = browser.find_element(By.XPATH,
-                                                  '//*[@id="fancybox-content"]/div/div/div/div[2]/ul[3]/li[1]/div/a')
-            br_city_select.click()
-            sleep(4)
-            ActionChains(browser).send_keys(Keys.ESCAPE).perform()
-            sleep(2)
-            for art in self.articles_with_catalog:
-                if art in self.update_arts:
-                    continue
-                else:
-                    if re.search(r'\d{3}', art):
-                        try:
-                            browser.get(self.__main_url + art)
-                            soup = BeautifulSoup(browser.page_source, 'lxml')
-                            registration = soup.find('div', class_='registrationHintDescription')
-                            if registration:
-                                print(f'БАН! Крайний артикул: {art}')
+            try:
+                browser.get('https://ipinfo.io/json')
+                browser.get(self.__main_url)
+                # city_btn = self.browser.find_element(By.XPATH, '/html/body/div[2]/div[2]/a[2]')
+                city_btn = browser.find_element(By.XPATH, '/html/body/div[2]/div[1]/div/ul[2]/li[1]/a')
+                city_btn.click()
+                sleep(4)
+                br_city = browser.find_element(By.XPATH,
+                                               '//*[@id="fancybox-content"]/div/div/div/div[1]/ul[2]/li[1]/div/a')
+                br_city.click()
+                sleep(2)
+                br_city_select = browser.find_element(By.XPATH,
+                                                      '//*[@id="fancybox-content"]/div/div/div/div[2]/ul[3]/li[1]/div/a')
+                br_city_select.click()
+                sleep(4)
+                ActionChains(browser).send_keys(Keys.ESCAPE).perform()
+                sleep(2)
+                for art in self.articles_with_catalog:
+                    if art in self.update_arts:
+                        continue
+                    else:
+                        if re.search(r'\d{3}', art):
+                            try:
+                                browser.get(self.__main_url + art)
+                                soup = BeautifulSoup(browser.page_source, 'lxml')
+                                registration = soup.find('div', class_='registrationHintDescription')
+                                if registration:
+                                    print(f'БАН! Крайний артикул: {art}')
+                                    browser.close()
+                                    browser.quit()
+                                    if soup_check.get('proxy') == '':
+                                        return {'status': 'БАН', 'last_art': art[14:], 'baned_proxy': 'WITHOUT_PROXY'}
+                                    else:
+                                        return {'status': 'БАН', 'last_art': art[14:],
+                                                'baned_proxy': soup_check.get('proxy')}
+                                current_art = f'goods_{art[14:]}'
+                                # self.update_arts.append(art)
+                                self.check_attr_by_soup(soup, current_art, art=art)
+                                time.sleep(0.5)
+                                print(art)
+                            except Exception as exp:
+                                print(f'Прокси: {soup_check.get("proxy")} перестал отвечать во время работы.')
                                 browser.close()
                                 browser.quit()
                                 if soup_check.get('proxy') == '':
@@ -562,25 +577,20 @@ class SeleniumParse:
                                 else:
                                     return {'status': 'БАН', 'last_art': art[14:],
                                             'baned_proxy': soup_check.get('proxy')}
-                            current_art = f'goods_{art[14:]}'
-                            self.update_arts.append(art)
-                            self.check_attr_by_soup(soup, current_art)
-                            time.sleep(0.5)
-                            print(art)
-                        except Exception as exp:
-                            print(f'Прокси: {soup_check.get("proxy")} перестал отвечать во время работы.')
-                            browser.close()
-                            browser.quit()
-                            if soup_check.get('proxy') == '':
-                                return {'status': 'БАН', 'last_art': art[14:], 'baned_proxy': 'WITHOUT_PROXY'}
-                            else:
-                                return {'status': 'БАН', 'last_art': art[14:],
-                                        'baned_proxy': soup_check.get('proxy')}
-                    else:
-                        print(art[14:])
+                        else:
+                            print(art[14:])
 
-            # browser.close()
-            return {'status': 'OK', 'last_art': self.articles_with_catalog[-1]}
+                # browser.close()
+                return {'status': 'OK', 'last_art': self.articles_with_catalog[-1]}
+            except Exception as exp:
+                print(f'Прокси: {soup_check.get("proxy")} перестал отвечать во время установки города.')
+                browser.close()
+                browser.quit()
+                if soup_check.get('proxy') == '':
+                    return {'status': 'БАН', 'last_art': -1, 'baned_proxy': 'WITHOUT_PROXY'}
+                else:
+                    return {'status': 'БАН', 'last_art': -2,
+                            'baned_proxy': soup_check.get('proxy')}
         elif soup_check.get('status') == 'ban':
             print('БАН на старте')
             if self.update_arts:
@@ -598,7 +608,7 @@ class SeleniumParse:
         """Добавляем пустую строку"""
         pass
 
-    def check_attr_by_soup(self, soup, current_art):
+    def check_attr_by_soup(self, soup, current_art, art):
         check_list = []
         # current_art = f'goods_{art.split("/")[-1]}'
         if soup.find('div', class_='ProductState ProductState--red'):
@@ -626,6 +636,7 @@ class SeleniumParse:
         #         check_list.append('+')
         if '-' not in check_list:
             print(f'Товар {current_art} проходит фильтры +')
+            self.update_arts.append(art)
             self.result_arts.append(current_art)
             self.get_attr_by_soup(soup)
 
@@ -747,26 +758,64 @@ class SeleniumParse:
         # time.sleep(3)
 
     def create_df(self):
-        self.df_each_product.insert(0, 'Артикул', self.result_arts)
-        self.df_each_product.insert(1, 'Название', self.product_name)
-        self.df_each_product.insert(2, 'Цена ОФИСМАГ', self.price_discount_list)
-        self.df_each_product.insert(3, 'Цена для OZON', [390 if x * 3 < 390 else round(x * 3) for x
-                                                         in self.price_discount_list])
-        self.df_each_product.insert(4, 'Общий остаток', [self.sovetskaya_list[i] + self.krasnoarmeyskaya_list[i]
-                                                         for i in range(len(self.krasnoarmeyskaya_list))])
-        self.df_each_product.insert(5, 'Остаток на Советской', self.sovetskaya_list)
-        self.df_each_product.insert(6, 'Остаток на Красноармейской', self.krasnoarmeyskaya_list)
-        self.df_each_product.insert(7, 'Брэнд', self.brand)
-        self.df_each_product.insert(8, 'Описание', self.description_list)
-        self.df_each_product.insert(9, 'Цвет', self.features_colour_list)
-        self.df_each_product.insert(10, 'Вес в упаковке (г)', self.features_package_weight_list)
-        self.df_each_product.insert(11, 'Ширина в упаковке (мм)', self.features_packing_width_list)
-        self.df_each_product.insert(12, 'Высота упаковки (мм)', self.features_packing_height_list)
-        self.df_each_product.insert(13, 'Длина упаковки (мм)', self.features_package_length_list)
-        self.df_each_product.insert(14, 'Производитель', self.features_manufacturer_list)
-        self.df_each_product.insert(15, 'Ссылка на главное фото товара', self.url_main_img_add_list)
-        self.df_each_product.insert(16, 'Ссылки на фото товара', self.url_img_add_list)
-        # self.df_each_product.insert(17, 'Ссылка на видео товара', self.video_lst)
+        try:
+            self.df_each_product.insert(0, 'Артикул', self.result_arts)
+            self.df_each_product.insert(1, 'Название', self.product_name)
+            self.df_each_product.insert(2, 'Цена ОФИСМАГ', self.price_discount_list)
+            self.df_each_product.insert(3, 'Цена для OZON', [390 if x * 3 < 390 else round(x * 3) for x
+                                                             in self.price_discount_list])
+            self.df_each_product.insert(4, 'Общий остаток', [self.sovetskaya_list[i] + self.krasnoarmeyskaya_list[i]
+                                                             for i in range(len(self.krasnoarmeyskaya_list))])
+            self.df_each_product.insert(5, 'Остаток на Советской', self.sovetskaya_list)
+            self.df_each_product.insert(6, 'Остаток на Красноармейской', self.krasnoarmeyskaya_list)
+            self.df_each_product.insert(7, 'Брэнд', self.brand)
+            self.df_each_product.insert(8, 'Описание', self.description_list)
+            self.df_each_product.insert(9, 'Цвет', self.features_colour_list)
+            self.df_each_product.insert(10, 'Вес в упаковке (г)', self.features_package_weight_list)
+            self.df_each_product.insert(11, 'Ширина в упаковке (мм)', self.features_packing_width_list)
+            self.df_each_product.insert(12, 'Высота упаковки (мм)', self.features_packing_height_list)
+            self.df_each_product.insert(13, 'Длина упаковки (мм)', self.features_package_length_list)
+            self.df_each_product.insert(14, 'Производитель', self.features_manufacturer_list)
+            self.df_each_product.insert(15, 'Ссылка на главное фото товара', self.url_main_img_add_list)
+            self.df_each_product.insert(16, 'Ссылки на фото товара', self.url_img_add_list)
+            # self.df_each_product.insert(17, 'Ссылка на видео товара', self.video_lst)
+        except Exception as exp:
+            print(f'Error DF: \n {exp}')
+            print('=' * 10)
+            print(self.result_arts)
+            print('=' * 10)
+            print(self.product_name)
+            print('=' * 10)
+            print(self.price_discount_list)
+            print('=' * 10)
+            print([390 if x * 3 < 390 else round(x * 3) for x in self.price_discount_list])
+            print('=' * 10)
+            print([self.sovetskaya_list[i] + self.krasnoarmeyskaya_list[i]
+                   for i in range(len(self.krasnoarmeyskaya_list))])
+            print('=' * 10)
+            print(self.sovetskaya_list)
+            print('=' * 10)
+            print(self.krasnoarmeyskaya_list)
+            print('=' * 10)
+            print(self.brand)
+            print('=' * 10)
+            print(self.description_list)
+            print('=' * 10)
+            print(self.features_colour_list)
+            print('=' * 10)
+            print(self.features_package_weight_list)
+            print('=' * 10)
+            print(self.features_packing_width_list)
+            print('=' * 10)
+            print(self.features_packing_height_list)
+            print('=' * 10)
+            print(self.features_package_length_list)
+            print('=' * 10)
+            print(self.features_manufacturer_list)
+            print('=' * 10)
+            print(self.url_main_img_add_list)
+            print('=' * 10)
+            print(self.url_img_add_list)
 
     def start(self):
         data = self.set_city_and_get_data()
