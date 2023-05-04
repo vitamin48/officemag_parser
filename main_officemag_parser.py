@@ -546,7 +546,7 @@ class SeleniumParse:
                 ActionChains(browser).send_keys(Keys.ESCAPE).perform()
                 sleep(2)
                 for art in self.articles_with_catalog:
-                    if art in self.update_arts:
+                    if f'goods_{art[14:]}' in self.result_arts:
                         continue
                     else:
                         if re.search(r'\d{3}', art):
@@ -587,19 +587,19 @@ class SeleniumParse:
                 browser.close()
                 browser.quit()
                 if soup_check.get('proxy') == '':
-                    return {'status': 'БАН', 'last_art': -1, 'baned_proxy': 'WITHOUT_PROXY'}
+                    return {'status': 'БАН', 'last_art': '-1', 'baned_proxy': 'WITHOUT_PROXY'}
                 else:
-                    return {'status': 'БАН', 'last_art': -2,
+                    return {'status': 'БАН', 'last_art': '-2',
                             'baned_proxy': soup_check.get('proxy')}
         elif soup_check.get('status') == 'ban':
             print('БАН на старте')
-            if self.update_arts:
-                return {'status': 'БАН', 'last_art': self.update_arts[-1][14:], 'baned_proxy': soup_check.get('proxy')}
+            if self.result_arts:
+                return {'status': 'БАН', 'last_art': self.result_arts[-1], 'baned_proxy': soup_check.get('proxy')}
             else:
-                return {'status': 'БАН', 'last_art': 0, 'baned_proxy': soup_check.get('proxy')}
+                return {'status': 'БАН', 'last_art': '0', 'baned_proxy': soup_check.get('proxy')}
         elif soup_check.get('status') == 'Все прокси недоступны':
-            if self.update_arts:
-                return {'status': 'Все прокси недоступны', 'last_art': self.update_arts,
+            if self.result_arts:
+                return {'status': 'Все прокси недоступны', 'last_art': self.result_arts[-1],
                         'baned_proxy': soup_check.get('proxy')}
             else:
                 return {'status': 'Все прокси недоступны', 'last_art': 0, 'baned_proxy': 0}
@@ -636,7 +636,7 @@ class SeleniumParse:
         #         check_list.append('+')
         if '-' not in check_list:
             print(f'Товар {current_art} проходит фильтры +')
-            self.update_arts.append(art)
+            # self.update_arts.append(art)
             self.result_arts.append(current_art)
             self.get_attr_by_soup(soup)
 
@@ -821,13 +821,20 @@ class SeleniumParse:
         data = self.set_city_and_get_data()
         if data.get('status') == 'БАН' and data.get('baned_proxy') == '':
             self.baned_proxy.append('WITHOUT_PROXY')
+            self.result_arts.pop(-1)
+            # if data.get('last_art') in self.result_arts:
+            #     self.result_arts.remove(data.get('last_art'))
             self.start()
         elif data.get('status') == 'БАН':
             self.baned_proxy.append(data.get('baned_proxy'))
+            # if data.get('last_art') in self.result_arts:
+            #     self.result_arts.remove(data.get('last_art'))
+            self.result_arts.pop(-1)
             self.start()
         elif data.get('status') == 'Все прокси недоступны' and data.get('last_art') == 0:
             print('Парс ни разу не отработал')
         elif data.get('status') == 'Все прокси недоступны' and data.get('last_art') != 0:
+            self.result_arts.pop(-1)
             first_art = self.articles_with_catalog[0][14:]
             last_art = data.get("last_art")[-1][14:]
             if self.result_arts:
