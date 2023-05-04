@@ -825,6 +825,14 @@ class SeleniumParse:
             # if data.get('last_art') in self.result_arts:
             #     self.result_arts.remove(data.get('last_art'))
             self.start()
+        elif data.get('status') == 'БАН' and data.get('last_art') == '-1':
+            self.baned_proxy.append(data.get('baned_proxy'))
+            self.result_arts.pop(-1)
+            self.start()
+        elif data.get('status') == 'БАН' and data.get('last_art') == '-2':
+            self.baned_proxy.append(data.get('baned_proxy'))
+            self.result_arts.pop(-1)
+            self.start()
         elif data.get('status') == 'БАН':
             self.baned_proxy.append(data.get('baned_proxy'))
             # if data.get('last_art') in self.result_arts:
