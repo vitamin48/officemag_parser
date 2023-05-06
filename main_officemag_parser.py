@@ -804,7 +804,7 @@ class SeleniumParse:
             print(self.features_packing_width_list)
             print('=' * 10)
             print(self.features_packing_height_list)
-            print('=' * 10)
+            print('=' * 11)
             print(self.features_package_length_list)
             print('=' * 10)
             print(self.features_manufacturer_list)
