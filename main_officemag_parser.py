@@ -282,7 +282,7 @@ class ParseEachProduct:
                             city = ParseEachProduct().get_current_city(soup)
                             if registration:
                                 print('БАН')
-                                return {'status': 'ban', 'proxy': proxy}
+                                return {'status': 'ban_start', 'proxy': proxy}
                             else:
                                 return {'status': 'OK', 'city': city, 'proxy': proxy}
                         else:
@@ -499,7 +499,7 @@ class SeleniumParse:
         self.articles_with_catalog = articles_with_catalog
         self.arts = arts
         self.baned_proxy = []
-        self.bad_brand_list = ['Lavazza', 'BRAUBERG', 'DURACELL', 'SYNERGETIC', 'SONNEN', 'JACOBS']
+        self.bad_brand_list = ['Lavazza', 'BRAUBERG', 'DURACELL', 'SYNERGETIC', 'SONNEN', 'JACOBS', 'ГАММА']
         self.remove_from_description = ['в нашем интернет-магазине', 'у нас на сайте']
         self.update_arts = []  # список отработанных артикулов
         self.df_each_product = pd.DataFrame()
@@ -555,54 +555,50 @@ class SeleniumParse:
                                 soup = BeautifulSoup(browser.page_source, 'lxml')
                                 registration = soup.find('div', class_='registrationHintDescription')
                                 if registration:
-                                    print(f'БАН! Крайний артикул: {art}')
+                                    print(f'БАН! Крайний артикул: {self.result_arts[-1]}')
                                     browser.close()
                                     browser.quit()
                                     if soup_check.get('proxy') == '':
-                                        return {'status': 'БАН', 'last_art': art[14:], 'baned_proxy': 'WITHOUT_PROXY'}
+                                        return {'status': 'WITHOUT_PROXY_ban', 'baned_proxy': 'WITHOUT_PROXY'}
                                     else:
-                                        return {'status': 'БАН', 'last_art': art[14:],
-                                                'baned_proxy': soup_check.get('proxy')}
+                                        return {'status': 'proxy_ban', 'baned_proxy': soup_check.get('proxy')}
                                 current_art = f'goods_{art[14:]}'
                                 # self.update_arts.append(art)
                                 self.check_attr_by_soup(soup, current_art, art=art)
                                 time.sleep(0.5)
-                                print(art)
+                                # print(art)
                             except Exception as exp:
                                 print(f'Прокси: {soup_check.get("proxy")} перестал отвечать во время работы.')
                                 browser.close()
                                 browser.quit()
                                 if soup_check.get('proxy') == '':
-                                    return {'status': 'БАН', 'last_art': art[14:], 'baned_proxy': 'WITHOUT_PROXY'}
+                                    return {'status': 'WITHOUT_PROXY_no_work', 'baned_proxy': 'WITHOUT_PROXY'}
                                 else:
-                                    return {'status': 'БАН', 'last_art': art[14:],
-                                            'baned_proxy': soup_check.get('proxy')}
+                                    return {'status': 'proxy_no_work', 'baned_proxy': soup_check.get('proxy')}
                         else:
                             print(art[14:])
 
                 # browser.close()
-                return {'status': 'OK', 'last_art': self.articles_with_catalog[-1]}
+                return {'status': 'Finish'}
             except Exception as exp:
                 print(f'Прокси: {soup_check.get("proxy")} перестал отвечать во время установки города.')
                 browser.close()
                 browser.quit()
                 if soup_check.get('proxy') == '':
-                    return {'status': 'БАН', 'last_art': '-1', 'baned_proxy': 'WITHOUT_PROXY'}
+                    return {'status': 'WITHOUT_PROXY_no_work_set_city', 'baned_proxy': 'WITHOUT_PROXY'}
                 else:
-                    return {'status': 'БАН', 'last_art': '-2',
-                            'baned_proxy': soup_check.get('proxy')}
-        elif soup_check.get('status') == 'ban':
-            print('БАН на старте')
+                    return {'status': 'proxy_no_work_set_city', 'baned_proxy': soup_check.get('proxy')}
+        elif soup_check.get('status') == 'ban_start':
+            print(f'БАН на старте (прокси: {soup_check.get("proxy")} работает, но бан на сайте)')
             if self.result_arts:
-                return {'status': 'БАН', 'last_art': self.result_arts[-1], 'baned_proxy': soup_check.get('proxy')}
+                return {'status': 'ban_start', 'baned_proxy': soup_check.get('proxy')}
             else:
-                return {'status': 'БАН', 'last_art': '0', 'baned_proxy': soup_check.get('proxy')}
+                return {'status': 'ban_start_without_result_arts', 'baned_proxy': soup_check.get('proxy')}
         elif soup_check.get('status') == 'Все прокси недоступны':
             if self.result_arts:
-                return {'status': 'Все прокси недоступны', 'last_art': self.result_arts[-1],
-                        'baned_proxy': soup_check.get('proxy')}
+                return {'status': 'all_proxy_no_work', 'baned_proxy': soup_check.get('proxy')}
             else:
-                return {'status': 'Все прокси недоступны', 'last_art': 0, 'baned_proxy': 0}
+                return {'status': 'all_proxy_no_work_without_result_arts', 'baned_proxy': 0}
 
     def add_empty_row(self):
         """Добавляем пустую строку"""
@@ -819,44 +815,60 @@ class SeleniumParse:
 
     def start(self):
         data = self.set_city_and_get_data()
-        if data.get('status') == 'БАН' and data.get('baned_proxy') == '':
+        if data.get('status') == 'WITHOUT_PROXY_ban':  # бан WITHOUT_PROXY на сайте во время работы
+            print('бан WITHOUT_PROXY на сайте во время работы')
             self.baned_proxy.append('WITHOUT_PROXY')
-            self.result_arts.pop(-1)
-            # if data.get('last_art') in self.result_arts:
-            #     self.result_arts.remove(data.get('last_art'))
             self.start()
-        elif data.get('status') == 'БАН' and data.get('last_art') == '-1':
+        elif data.get('status') == 'proxy_ban':  # бан текущего прокси на сайте во время работы
+            print('бан текущего прокси на сайте во время работы')
             self.baned_proxy.append(data.get('baned_proxy'))
-            self.result_arts.pop(-1)
             self.start()
-        elif data.get('status') == 'БАН' and data.get('last_art') == '-2':
+        elif data.get('status') == 'WITHOUT_PROXY_no_work':  # WITHOUT_PROXY перестал отвечать во время работы.
+            print('WITHOUT_PROXY перестал отвечать во время работы.')
+            self.baned_proxy.append('WITHOUT_PROXY')
+            self.start()
+        elif data.get('status') == 'proxy_no_work':  # текущий прокси перестал отвечать во время работы.
+            print('текущий прокси перестал отвечать во время работы.')
             self.baned_proxy.append(data.get('baned_proxy'))
-            self.result_arts.pop(-1)
             self.start()
-        elif data.get('status') == 'БАН':
+        elif data.get(
+                'status') == 'WITHOUT_PROXY_no_work_set_city':  # WITHOUT_PROXY перестал отвечать во время установки
+            # города.
+            print('WITHOUT_PROXY перестал отвечать во время установки города')
+            self.baned_proxy.append('WITHOUT_PROXY')
+            self.start()
+        elif data.get(
+                'status') == 'proxy_no_work_set_city':  # текущий прокси перестал отвечать во время установки города.
+            print('текущий прокси перестал отвечать во время установки города.')
             self.baned_proxy.append(data.get('baned_proxy'))
-            # if data.get('last_art') in self.result_arts:
-            #     self.result_arts.remove(data.get('last_art'))
-            self.result_arts.pop(-1)
             self.start()
-        elif data.get('status') == 'Все прокси недоступны' and data.get('last_art') == 0:
-            print('Парс ни разу не отработал')
-        elif data.get('status') == 'Все прокси недоступны' and data.get('last_art') != 0:
-            self.result_arts.pop(-1)
-            first_art = self.articles_with_catalog[0][14:]
-            last_art = data.get("last_art")[-1][14:]
-            if self.result_arts:
-                self.create_df()
-                current_date = date.today()
-                XLS().create_from_one_df(self.df_each_product, 'Товары',
-                                         f'update_arts_{first_art}_{last_art}_{current_date}')
-        elif data.get('status') == 'OK':
-            first_art = self.articles_with_catalog[0][14:]
-            last_art = data.get("last_art")[14:]
+        elif data.get('status') == 'ban_start':  # БАН прокси на старте на сайте (сам прокси работает)
+            print('БАН прокси на старте на сайте (сам прокси работает)')
+            self.baned_proxy.append(data.get('baned_proxy'))
+            self.start()
+        elif data.get(
+                'status') == 'ban_start_without_result_arts':  # БАН прокси на старте на сайте БЕЗ РЕЗУЛЬТАТОВ
+            # (сам прокси работает)
+            print(' БАН прокси на старте на сайте БЕЗ РЕЗУЛЬТАТОВ (сам прокси работает)')
+            self.baned_proxy.append(data.get('baned_proxy'))
+            self.start()
+        elif data.get(
+                'status') == 'all_proxy_no_work_without_result_arts':  # отработаны или недоступны все прокси,
+            # без результатов
+            print('отработаны или недоступны все прокси, без результатов')
+        elif data.get('status') == 'all_proxy_no_work':  # отработаны или недоступны все прокси, НО есть результаты
+            print('отработаны или недоступны все прокси, НО есть результаты')
             self.create_df()
             current_date = date.today()
             XLS().create_from_one_df(self.df_each_product, 'Товары',
-                                     f'update_arts_{first_art}_{last_art}_{current_date}')
+                                     f'update_arts_{self.articles_with_catalog[0][14:]}_'
+                                     f'{self.result_arts[-1]}_{current_date}')
+        elif data.get('status') == 'Finish':
+            self.create_df()
+            current_date = date.today()
+            XLS().create_from_one_df(self.df_each_product, 'Товары',
+                                     f'update_arts_{self.articles_with_catalog[0][14:]}_'
+                                     f'{self.result_arts[-1]}_{current_date}')
 
 
 class CatalogABC:
