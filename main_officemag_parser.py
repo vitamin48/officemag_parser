@@ -608,6 +608,8 @@ class SeleniumParse:
         pass
 
     def check_attr_by_soup(self, soup, current_art, art):
+        if len(self.result_arts) != len(self.product_name):
+            print('Количество артикулов не совпадает с количеством имен')
         check_list = []
         # current_art = f'goods_{art.split("/")[-1]}'
         if soup.find('div', class_='ProductState ProductState--red'):
@@ -625,6 +627,7 @@ class SeleniumParse:
                 check_list.append('+')
         else:
             print(f'{bcolors.WARNING}Product__name отсутствует{bcolors.ENDC}')
+            check_list.append('-')
         # if soup.find('div', class_='ProductState ProductState--gray'):
         #     min_count_str = soup.find('div', class_='ProductState ProductState--gray').text
         #     min_count = int(re.findall(r'\d+', min_count_str)[0])
