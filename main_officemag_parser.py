@@ -499,7 +499,7 @@ class SeleniumParse:
         self.articles_with_catalog = articles_with_catalog
         self.arts = arts
         self.baned_proxy = []
-        self.bad_brand_list = ['Lavazza', 'BRAUBERG', 'DURACELL', 'SYNERGETIC', 'SONNEN', 'JACOBS', 'ГАММА']
+        self.bad_brand_list = ['Lavazza', 'BRAUBERG', 'DURACELL', 'SYNERGETIC', 'SONNEN', 'JACOBS', 'ГАММА', 'KITFORT']
         self.remove_from_description = ['в нашем интернет-магазине', 'у нас на сайте']
         self.update_arts = []  # список отработанных артикулов
         self.df_each_product = pd.DataFrame()
@@ -546,7 +546,8 @@ class SeleniumParse:
                 ActionChains(browser).send_keys(Keys.ESCAPE).perform()
                 sleep(2)
                 for art in self.articles_with_catalog:
-                    if f'goods_{art[14:]}' in self.result_arts:
+                    current_art = f'goods_{art[14:]}'
+                    if current_art in self.update_arts:
                         continue
                     else:
                         if re.search(r'\d{3}', art):
@@ -555,20 +556,20 @@ class SeleniumParse:
                                 soup = BeautifulSoup(browser.page_source, 'lxml')
                                 registration = soup.find('div', class_='registrationHintDescription')
                                 if registration:
-                                    print(f'БАН! Крайний артикул: {self.result_arts[-1]}')
+                                    print(f'{bcolors.FAIL}БАН! Крайний артикул: {current_art}{bcolors.ENDC}')
                                     browser.close()
                                     browser.quit()
                                     if soup_check.get('proxy') == '':
                                         return {'status': 'WITHOUT_PROXY_ban', 'baned_proxy': 'WITHOUT_PROXY'}
                                     else:
                                         return {'status': 'proxy_ban', 'baned_proxy': soup_check.get('proxy')}
-                                current_art = f'goods_{art[14:]}'
-                                # self.update_arts.append(art)
+                                self.update_arts.append(current_art)
                                 self.check_attr_by_soup(soup, current_art, art=art)
                                 time.sleep(0.5)
                                 # print(art)
                             except Exception as exp:
-                                print(f'Прокси: {soup_check.get("proxy")} перестал отвечать во время работы.')
+                                print(f'{bcolors.FAIL}Прокси: {soup_check.get("proxy")} перестал отвечать во время '
+                                      f'работы.{bcolors.ENDC}')
                                 browser.close()
                                 browser.quit()
                                 if soup_check.get('proxy') == '':
@@ -576,12 +577,13 @@ class SeleniumParse:
                                 else:
                                     return {'status': 'proxy_no_work', 'baned_proxy': soup_check.get('proxy')}
                         else:
-                            print(art[14:])
+                            print(f'{bcolors.OKGREEN}{art[14:]}{bcolors.ENDC}')
 
                 # browser.close()
                 return {'status': 'Finish'}
             except Exception as exp:
-                print(f'Прокси: {soup_check.get("proxy")} перестал отвечать во время установки города.')
+                print(f'{bcolors.FAIL}Прокси: {soup_check.get("proxy")} перестал отвечать во время установки города.'
+                      f'{bcolors.ENDC}')
                 browser.close()
                 browser.quit()
                 if soup_check.get('proxy') == '':
@@ -589,7 +591,8 @@ class SeleniumParse:
                 else:
                     return {'status': 'proxy_no_work_set_city', 'baned_proxy': soup_check.get('proxy')}
         elif soup_check.get('status') == 'ban_start':
-            print(f'БАН на старте (прокси: {soup_check.get("proxy")} работает, но бан на сайте)')
+            print(f'{bcolors.FAIL}БАН на старте (прокси: {soup_check.get("proxy")} работает, но бан на сайте)'
+                  f'{bcolors.ENDC}')
             if self.result_arts:
                 return {'status': 'ban_start', 'baned_proxy': soup_check.get('proxy')}
             else:
@@ -611,17 +614,17 @@ class SeleniumParse:
             red_product_state = soup.find('div', class_='ProductState ProductState--red').text
             if red_product_state == 'Недоступен к\xa0заказу':
                 check_list.append('-')
-                print(f'Товар {current_art} недоступен к заказу')
+                print(f'{bcolors.WARNING}Товар {current_art} недоступен к заказу{bcolors.ENDC}')
         else:
             check_list.append('+')
         if soup.find('div', class_='Product__name'):
             if any(ext.lower() in soup.find('div', class_='Product__name').text.lower() for ext in self.bad_brand_list):
                 check_list.append('-')
-                print(f'Товар {current_art} из списка нежелательных брэндов')
+                print(f'{bcolors.WARNING}Товар {current_art} из списка нежелательных брэндов{bcolors.ENDC}')
             else:
                 check_list.append('+')
         else:
-            print()
+            print(f'{bcolors.WARNING}Product__name отсутствует{bcolors.ENDC}')
         # if soup.find('div', class_='ProductState ProductState--gray'):
         #     min_count_str = soup.find('div', class_='ProductState ProductState--gray').text
         #     min_count = int(re.findall(r'\d+', min_count_str)[0])
