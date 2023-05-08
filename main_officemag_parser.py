@@ -499,7 +499,8 @@ class SeleniumParse:
         self.articles_with_catalog = articles_with_catalog
         self.arts = arts
         self.baned_proxy = []
-        self.bad_brand_list = ['Lavazza', 'BRAUBERG', 'DURACELL', 'SYNERGETIC', 'SONNEN', 'JACOBS', 'ГАММА', 'KITFORT']
+        self.bad_brand_list = ['Lavazza', 'BRAUBERG', 'DURACELL', 'SYNERGETIC', 'SONNEN', 'JACOBS', 'ГАММА', 'KITFORT',
+                               'DEFENDER', 'XIAOMI', 'SVEN', 'LOGITECH']
         self.remove_from_description = ['в нашем интернет-магазине', 'у нас на сайте']
         self.update_arts = []  # список отработанных артикулов
         self.df_each_product = pd.DataFrame()
@@ -545,7 +546,7 @@ class SeleniumParse:
                 sleep(4)
                 ActionChains(browser).send_keys(Keys.ESCAPE).perform()
                 sleep(2)
-                for art in self.articles_with_catalog:
+                for art in tqdm(self.articles_with_catalog):
                     current_art = f'goods_{art[14:]}'
                     if current_art in self.update_arts:
                         continue
@@ -556,7 +557,7 @@ class SeleniumParse:
                                 soup = BeautifulSoup(browser.page_source, 'lxml')
                                 registration = soup.find('div', class_='registrationHintDescription')
                                 if registration:
-                                    print(f'{bcolors.FAIL}БАН! Крайний артикул: {current_art}{bcolors.ENDC}')
+                                    print(f'{bcolors.FAIL}БАН! Крайний артикул: {self.update_arts[-1]}{bcolors.ENDC}')
                                     browser.close()
                                     browser.quit()
                                     if soup_check.get('proxy') == '':
@@ -565,7 +566,7 @@ class SeleniumParse:
                                         return {'status': 'proxy_ban', 'baned_proxy': soup_check.get('proxy')}
                                 self.update_arts.append(current_art)
                                 self.check_attr_by_soup(soup, current_art, art=art)
-                                time.sleep(0.5)
+                                time.sleep(0.3)
                                 # print(art)
                             except Exception as exp:
                                 print(f'{bcolors.FAIL}Прокси: {soup_check.get("proxy")} перестал отвечать во время '
