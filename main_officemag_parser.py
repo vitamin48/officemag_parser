@@ -501,7 +501,7 @@ class SeleniumParse:
         self.baned_proxy = []
         self.bad_brand_list = ['Lavazza', 'BRAUBERG', 'DURACELL', 'SYNERGETIC', 'SONNEN', 'JACOBS', 'ГАММА', 'KITFORT',
                                'DEFENDER', 'XIAOMI', 'SVEN', 'LOGITECH', 'ЧЕРНОГОЛОВКА', 'СЕНЕЖСКАЯ', 'СВЯТОЙ ИСТОЧНИК',
-                               'BORJOMI']
+                               'BORJOMI', 'KINGSTON', 'CANON', 'HP', 'CASIO']
         self.remove_from_description = ['в нашем интернет-магазине', 'у нас на сайте']
         self.update_arts = []  # список отработанных артикулов
         self.df_each_product = pd.DataFrame()
@@ -567,7 +567,7 @@ class SeleniumParse:
                                         return {'status': 'proxy_ban', 'baned_proxy': soup_check.get('proxy')}
                                 self.update_arts.append(current_art)
                                 self.check_attr_by_soup(soup, current_art, art=art)
-                                time.sleep(0.3)
+                                time.sleep(1)
                                 # print(art)
                             except Exception as exp:
                                 print(f'{bcolors.FAIL}Прокси: {soup_check.get("proxy")} перестал отвечать во время '
