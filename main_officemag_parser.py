@@ -555,6 +555,7 @@ class SeleniumParse:
                         if re.search(r'\d{3}', art):
                             try:
                                 browser.get(self.__main_url + art)
+                                time.sleep(0.7)
                                 soup = BeautifulSoup(browser.page_source, 'lxml')
                                 registration = soup.find('div', class_='registrationHintDescription')
                                 if registration:
@@ -567,7 +568,6 @@ class SeleniumParse:
                                         return {'status': 'proxy_ban', 'baned_proxy': soup_check.get('proxy')}
                                 self.update_arts.append(current_art)
                                 self.check_attr_by_soup(soup, current_art, art=art)
-                                time.sleep(1)
                                 # print(art)
                             except Exception as exp:
                                 print(f'{bcolors.FAIL}Прокси: {soup_check.get("proxy")} перестал отвечать во время '
@@ -610,39 +610,37 @@ class SeleniumParse:
         pass
 
     def check_attr_by_soup(self, soup, current_art, art):
-        if len(self.result_arts) != len(self.product_name):
-            print('Количество артикулов не совпадает с количеством имен')
-        check_list = []
-        # current_art = f'goods_{art.split("/")[-1]}'
-        if soup.find('div', class_='ProductState ProductState--red'):
-            red_product_state = soup.find('div', class_='ProductState ProductState--red').text
-            if red_product_state == 'Недоступен к\xa0заказу':
-                check_list.append('-')
-                print(f'{bcolors.WARNING}Товар {current_art} недоступен к заказу{bcolors.ENDC}')
-        else:
-            check_list.append('+')
-        if soup.find('div', class_='Product__name'):
-            if any(ext.lower() in soup.find('div', class_='Product__name').text.lower() for ext in self.bad_brand_list):
-                check_list.append('-')
-                print(f'{bcolors.WARNING}Товар {current_art} из списка нежелательных брэндов{bcolors.ENDC}')
+        if len(self.result_arts) == len(self.product_name) == len(self.price_discount_list) == \
+                len(self.sovetskaya_list) == len(self.krasnoarmeyskaya_list) == len(self.brand) == \
+                len(self.description_list) == len(self.features_colour_list) == len(self.features_package_weight_list)\
+                == len(self.features_packing_width_list) == len(self.features_packing_height_list) == \
+                len(self.features_package_length_list) == len(self.features_manufacturer_list) == \
+                len(self.url_main_img_add_list) == len(self.url_img_add_list):
+            check_list = []
+            if soup.find('div', class_='ProductState ProductState--red'):
+                red_product_state = soup.find('div', class_='ProductState ProductState--red').text
+                if red_product_state == 'Недоступен к\xa0заказу':
+                    check_list.append('-')
+                    print(f'{bcolors.WARNING}Товар {current_art} недоступен к заказу{bcolors.ENDC}')
             else:
                 check_list.append('+')
+            if soup.find('div', class_='Product__name'):
+                if any(ext.lower() in soup.find('div', class_='Product__name').text.lower() for ext in
+                       self.bad_brand_list):
+                    check_list.append('-')
+                    print(f'{bcolors.WARNING}Товар {current_art} из списка нежелательных брэндов{bcolors.ENDC}')
+                else:
+                    check_list.append('+')
+            else:
+                print(f'{bcolors.WARNING}Product__name отсутствует{bcolors.ENDC}')
+                check_list.append('-')
+            if '-' not in check_list:
+                print(f'Товар {current_art} проходит фильтры +')
+                # self.update_arts.append(art)
+                self.result_arts.append(current_art)
+                self.get_attr_by_soup(soup)
         else:
-            print(f'{bcolors.WARNING}Product__name отсутствует{bcolors.ENDC}')
-            check_list.append('-')
-        # if soup.find('div', class_='ProductState ProductState--gray'):
-        #     min_count_str = soup.find('div', class_='ProductState ProductState--gray').text
-        #     min_count = int(re.findall(r'\d+', min_count_str)[0])
-        #     if min_count > 1:
-        #         check_list.append('-')
-        #         print(f'Минимальная партия более 1, а именно: {min_count}')
-        #     else:
-        #         check_list.append('+')
-        if '-' not in check_list:
-            print(f'Товар {current_art} проходит фильтры +')
-            # self.update_arts.append(art)
-            self.result_arts.append(current_art)
-            self.get_attr_by_soup(soup)
+            print('Количество значений не одинаково!')
 
     def get_attr_by_soup(self, soup):
         self.soup_list.append(soup)
@@ -755,8 +753,11 @@ class SeleniumParse:
                 else:
                     print(f'Ошибка: в строке \n\n{i.text}\n\nв разделе размер нет см')
             elif 'Производитель — ' in i.text:
-                manufacturer = i.text.replace('Производитель — ', '').replace(' ', '').replace('\n', '')
-                self.features_manufacturer_list.append(manufacturer)
+                if 'Производитель — ООО' in i.text:
+                    pass
+                else:
+                    manufacturer = i.text.replace('Производитель —', '').replace(' ', '').replace('\n', '')
+                    self.features_manufacturer_list.append(manufacturer)
         if not find_colour:
             self.features_colour_list.append('-')
         # time.sleep(3)
