@@ -555,7 +555,7 @@ class SeleniumParse:
                         if re.search(r'\d{3}', art):
                             try:
                                 browser.get(self.__main_url + art)
-                                time.sleep(0.7)
+                                time.sleep(0.3)
                                 soup = BeautifulSoup(browser.page_source, 'lxml')
                                 registration = soup.find('div', class_='registrationHintDescription')
                                 if registration:
@@ -580,7 +580,6 @@ class SeleniumParse:
                                     return {'status': 'proxy_no_work', 'baned_proxy': soup_check.get('proxy')}
                         else:
                             print(f'{bcolors.OKGREEN}{art[14:]}{bcolors.ENDC}')
-
                 # browser.close()
                 return {'status': 'Finish'}
             except Exception as exp:
@@ -612,7 +611,7 @@ class SeleniumParse:
     def check_attr_by_soup(self, soup, current_art, art):
         if len(self.result_arts) == len(self.product_name) == len(self.price_discount_list) == \
                 len(self.sovetskaya_list) == len(self.krasnoarmeyskaya_list) == len(self.brand) == \
-                len(self.description_list) == len(self.features_colour_list) == len(self.features_package_weight_list)\
+                len(self.description_list) == len(self.features_colour_list) == len(self.features_package_weight_list) \
                 == len(self.features_packing_width_list) == len(self.features_packing_height_list) == \
                 len(self.features_package_length_list) == len(self.features_manufacturer_list) == \
                 len(self.url_main_img_add_list) == len(self.url_img_add_list):
@@ -674,7 +673,6 @@ class SeleniumParse:
                 else:
                     video_present = False
                     url.append(url_img)
-
             if not video_present:
                 self.video_lst.append('-')
 
@@ -722,16 +720,19 @@ class SeleniumParse:
         li_set = features.find_all('li')
         l = len(li_set)
         find_colour = False
+        count_manuf = 0
+        all_manuf = []
+        for manuf in li_set:
+            if 'Производитель — ' in manuf.text:
+                count_manuf += count_manuf
+                all_manuf.append(manuf.text)
+        manufacturer = all_manuf[-1].replace('Производитель —', '').replace(' ', '').replace('\n', '')
+        self.features_manufacturer_list.append(manufacturer)
         for i in li_set:
             # print(i.text)
             if 'Цвет — ' in i.text:
                 self.features_colour_list.append(i.text.replace('Цвет — ', '')[:-1])
                 find_colour = True
-            # if any('Цвет — ' in s for s in li_set):
-            #     if 'Цвет — ' in i.text:
-            #         features_colour_list.append(i.text.replace('Цвет — ', '')[:-1])
-            # else:
-            #     features_colour_list.append('-')
             if 'Вес с упаковкой' in i.text:
                 weight = i.text.replace('Вес с упаковкой', '').replace('\n', '').replace(' ', '').replace('—', '')
                 if 'кг' in weight:
@@ -752,12 +753,13 @@ class SeleniumParse:
                     self.features_packing_height_list.append(height)
                 else:
                     print(f'Ошибка: в строке \n\n{i.text}\n\nв разделе размер нет см')
-            elif 'Производитель — ' in i.text:
-                if 'Производитель — ООО' in i.text:
-                    pass
-                else:
-                    manufacturer = i.text.replace('Производитель —', '').replace(' ', '').replace('\n', '')
-                    self.features_manufacturer_list.append(manufacturer)
+            # elif 'Производитель — ' in i.text:
+            #     if 'Производитель — ООО' in i.text:
+            #         pass
+            #     else:
+            #         manufacturer = i.text.replace('Производитель —', '').replace(' ', '').replace('\n', '')
+            #         self.features_manufacturer_list.append(manufacturer)
+            # # if 'Производитель — ' in i.text:
         if not find_colour:
             self.features_colour_list.append('-')
         # time.sleep(3)
@@ -786,41 +788,6 @@ class SeleniumParse:
             # self.df_each_product.insert(17, 'Ссылка на видео товара', self.video_lst)
         except Exception as exp:
             print(f'Error DF: \n {exp}')
-            # print('=' * 10)
-            # print(self.result_arts)
-            # print('=' * 10)
-            # print(self.product_name)
-            # print('=' * 10)
-            # print(self.price_discount_list)
-            # print('=' * 10)
-            # print([390 if x * 3 < 390 else round(x * 3) for x in self.price_discount_list])
-            # print('=' * 10)
-            # print([self.sovetskaya_list[i] + self.krasnoarmeyskaya_list[i]
-            #        for i in range(len(self.krasnoarmeyskaya_list))])
-            # print('=' * 10)
-            # print(self.sovetskaya_list)
-            # print('=' * 10)
-            # print(self.krasnoarmeyskaya_list)
-            # print('=' * 10)
-            # print(self.brand)
-            # print('=' * 10)
-            # print(self.description_list)
-            # print('=' * 10)
-            # print(self.features_colour_list)
-            # print('=' * 10)
-            # print(self.features_package_weight_list)
-            # print('=' * 10)
-            # print(self.features_packing_width_list)
-            # print('=' * 10)
-            # print(self.features_packing_height_list)
-            # print('=' * 11)
-            # print(self.features_package_length_list)
-            # print('=' * 10)
-            # print(self.features_manufacturer_list)
-            # print('=' * 10)
-            # print(self.url_main_img_add_list)
-            # print('=' * 10)
-            # print(self.url_img_add_list)
 
     def start(self):
         data = self.set_city_and_get_data()
@@ -870,13 +837,13 @@ class SeleniumParse:
             self.create_df()
             current_date = date.today()
             XLS().create_from_one_df(self.df_each_product, 'Товары',
-                                     f'update_arts_{self.articles_with_catalog[0][14:]}_'
+                                     f'offmag_{self.articles_with_catalog[0][14:]}_'
                                      f'{self.result_arts[-1]}_{current_date}')
         elif data.get('status') == 'Finish':
             self.create_df()
             current_date = date.today()
             XLS().create_from_one_df(self.df_each_product, 'Товары',
-                                     f'update_arts_{self.articles_with_catalog[0][14:]}_'
+                                     f'offmag_{self.articles_with_catalog[0][14:]}_'
                                      f'{self.result_arts[-1]}_{current_date}')
 
 
@@ -929,21 +896,6 @@ class Catalog:
         browser.get(url)
         soup = BeautifulSoup(browser.page_source, 'lxml')
         return soup
-
-    # def get_articles_by_soup(self, soup):
-    #     status = True
-    #     page = 1
-    #     while status:
-    #         if soup.find('div', class_='itemsNotFound'):
-    #             status = False
-    #         else:
-    #             print(f'page={page}')
-    #             page += 1
-    #             listitems = soup.findAll('li', class_='js-productListItem')
-    #             for l_it in listitems:
-    #                 str_id = listitems[l_it].attrs.get('data-ga-obj')
-    #                 id = ast.literal_eval(str_id).get('id')
-    #                 self.res_list.append(id)
 
     def get_articles(self, browser, url_cat):
         status = True
