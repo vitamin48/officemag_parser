@@ -1,4 +1,5 @@
 """Парсер магазина officemag (https://www.officemag.ru/)"""
+import sys
 import re
 from pathlib import Path
 import requests
@@ -22,7 +23,7 @@ from selenium.webdriver.common.by import By
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
-from selenium.webdriver import Keys, ActionChains
+from selenium.webdriver import ActionChains
 from time import sleep
 
 
@@ -274,7 +275,8 @@ class ParseEachProduct:
                 try:
                     res = requests.get('https://ipinfo.io/json', proxies={'https': proxy}, timeout=3)
                     print(f'{proxy} + \n{res.text}')
-                    if res.status_code == 200:
+                    rc = res.status_code
+                    if res.status_code == 200 or res.status_code == 429:
                         r = requests.get(f'{self.__main_url}')
                         if r.status_code == 200:
                             soup = BeautifulSoup(r.text, 'lxml')
@@ -555,7 +557,7 @@ class SeleniumParse:
                         if re.search(r'\d{3}', art):
                             try:
                                 browser.get(self.__main_url + art)
-                                time.sleep(0.3)
+                                time.sleep(1.9)
                                 soup = BeautifulSoup(browser.page_source, 'lxml')
                                 registration = soup.find('div', class_='registrationHintDescription')
                                 if registration:
@@ -572,6 +574,8 @@ class SeleniumParse:
                             except Exception as exp:
                                 print(f'{bcolors.FAIL}Прокси: {soup_check.get("proxy")} перестал отвечать во время '
                                       f'работы.{bcolors.ENDC}')
+                                print(exp)
+                                print('=' * 10)
                                 browser.close()
                                 browser.quit()
                                 if soup_check.get('proxy') == '':
@@ -640,6 +644,22 @@ class SeleniumParse:
                 self.get_attr_by_soup(soup)
         else:
             print('Количество значений не одинаково!')
+            print('result_arts=', len(self.result_arts))
+            print('product_name=', len(self.product_name))
+            print('price_discount_list=', len(self.price_discount_list))
+            print('sovetskaya_list=', len(self.sovetskaya_list))
+            print('krasnoarmeyskaya_list=', len(self.krasnoarmeyskaya_list))
+            print('brand=', len(self.brand))
+            print('description_list=', len(self.description_list))
+            print('features_colour_list=', len(self.features_colour_list))
+            print('features_package_weight_list=', len(self.features_package_weight_list))
+            print('features_packing_width_list=', len(self.features_packing_width_list))
+            print('features_packing_height_list=', len(self.features_packing_height_list))
+            print('features_package_length_list=', len(self.features_package_length_list))
+            print('features_manufacturer_list=', len(self.features_manufacturer_list))
+            print('url_main_img_add_list=', len(self.url_main_img_add_list))
+            print('url_img_add_list=', len(self.url_img_add_list))
+            sys.exit()
 
     def get_attr_by_soup(self, soup):
         self.soup_list.append(soup)
@@ -718,13 +738,27 @@ class SeleniumParse:
 
         features = tabscontent.find('ul', class_='infoFeatures')  # общий раздел характеристики
         li_set = features.find_all('li')
+        li_list = list(li_set)
+        # if (s for s in li_list if 'Размер в упаковке'.lower() in s.lower()):
+        #     pass
+        # else:
+        if not [x for x in li_list if 'Размер в упаковке' in x.text]:
+            print(f'{bcolors.WARNING}Параметр Размер в упаковке отсутствует!{bcolors.ENDC}')
+            self.features_package_length_list.append('-')
+            self.features_packing_width_list.append('-')
+            self.features_packing_height_list.append('-')
+        # print("\n".join(s for s in li_list if sub.lower() in s.lower()))
+        # if any(ext.lower() in 'Размер в упаковке'.lower() for ext in li_set):
+        #     print('Размер в упаковке+')
+        # else:
+        #     print('Размер в упаковке-')
         l = len(li_set)
         find_colour = False
-        count_manuf = 0
+        # count_manuf = 0
         all_manuf = []
         for manuf in li_set:
             if 'Производитель — ' in manuf.text:
-                count_manuf += count_manuf
+                # count_manuf += count_manuf
                 all_manuf.append(manuf.text)
         manufacturer = all_manuf[-1].replace('Производитель —', '').replace(' ', '').replace('\n', '')
         self.features_manufacturer_list.append(manufacturer)
@@ -753,16 +787,8 @@ class SeleniumParse:
                     self.features_packing_height_list.append(height)
                 else:
                     print(f'Ошибка: в строке \n\n{i.text}\n\nв разделе размер нет см')
-            # elif 'Производитель — ' in i.text:
-            #     if 'Производитель — ООО' in i.text:
-            #         pass
-            #     else:
-            #         manufacturer = i.text.replace('Производитель —', '').replace(' ', '').replace('\n', '')
-            #         self.features_manufacturer_list.append(manufacturer)
-            # # if 'Производитель — ' in i.text:
         if not find_colour:
             self.features_colour_list.append('-')
-        # time.sleep(3)
 
     def create_df(self):
         try:
