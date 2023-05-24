@@ -1,5 +1,6 @@
 """Парсер магазина officemag (https://www.officemag.ru/)"""
 import sys
+import os
 import re
 from pathlib import Path
 import requests
@@ -608,10 +609,6 @@ class SeleniumParse:
             else:
                 return {'status': 'all_proxy_no_work_without_result_arts', 'baned_proxy': 0}
 
-    def add_empty_row(self):
-        """Добавляем пустую строку"""
-        pass
-
     def check_attr_by_soup(self, soup, current_art, art):
         if len(self.result_arts) == len(self.product_name) == len(self.price_discount_list) == \
                 len(self.sovetskaya_list) == len(self.krasnoarmeyskaya_list) == len(self.brand) == \
@@ -956,6 +953,34 @@ class Catalog:
         else:
             print('БАН')
         return self.res_list
+
+
+class OpenVPN:
+    def __init__(self):
+        self.path_bin = 'C:\\Program Files\\OpenVPN\\bin\\openvpn-gui.exe'
+        self.path_config = os.path.expanduser('~') + '\\OpenVPN\\config\\'
+        self.path_logs = os.path.expanduser('~') + '\\OpenVPN\\log\\'
+        self.dir_list_config = os.listdir(self.path_config)
+        self.dir_list_logs = os.listdir(self.path_logs)
+        self.connect_msg = 'Initialization Sequence Completed'
+        self.disconnect_msg = 'SIGTERM[hard,] received, process exiting'
+
+    def get_connect(self, index_vpn=0):
+        os.system(rf'"C:\Program Files\OpenVPN\bin\openvpn-gui.exe" --command disconnect_all')
+        if len(self.dir_list_config) == index_vpn + 1:
+            print('использованы все vpn')
+            return {'status': 'no_vpn'}
+        for cnf in enumerate(self.dir_list_config):
+            os.system(rf'"C:\Program Files\OpenVPN\bin\openvpn-gui.exe" --command connect {cnf[1]}')
+            time.sleep(30)
+            with open(self.path_logs + self.dir_list_logs[cnf[0]], 'r') as log:
+                for line in log:
+                    if self.connect_msg in line:
+                        print(line)
+                        return {'status': 'connect', 'index_vpn': self.dir_list_config.index(cnf[1]),
+                                'name_vpn': self.dir_list_config[cnf[0]]}
+            os.system(rf'"C:\Program Files\OpenVPN\bin\openvpn-gui.exe" --command disconnect {cnf[1]}')
+            continue
 
 
 def parse_discont_items():
