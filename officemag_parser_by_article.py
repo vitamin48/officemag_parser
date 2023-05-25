@@ -47,6 +47,8 @@ class SeleniumParse:
         self.update_arts = []  # список отработанных артикулов
         self.df_each_product = pd.DataFrame()
 
+        self.open_vpn = OpenVPN()
+
         self.result_arts = []
         self.product_name = []  # Название товара
         self.brand = []
@@ -67,6 +69,7 @@ class SeleniumParse:
     def set_city_and_get_data_over_vpn(self):
         self.options.add_argument('--blink-settings=imagesEnabled=false')
         browser = webdriver.Chrome(service=self.service, options=self.options)
+        browser.set_page_load_timeout(50)
         try:
             browser.get('https://ipinfo.io/json')
             browser.get(self.__main_url)
@@ -91,7 +94,7 @@ class SeleniumParse:
                     if re.search(r'\d{3}', art):
                         try:
                             browser.get(self.__main_url + art)
-                            time.sleep(1.9)
+                            time.sleep(1.5)
                             soup = BeautifulSoup(browser.page_source, 'lxml')
                             registration = soup.find('div', class_='registrationHintDescription')
                             if registration:
@@ -114,6 +117,7 @@ class SeleniumParse:
         except Exception as exp:
             print(
                 f'{bcolors.FAIL}VPN перестал отвечать во время установки города.{bcolors.ENDC}')
+            print(exp)
             browser.close()
             browser.quit()
             return {'status': 'ban_vpn'}
@@ -310,23 +314,30 @@ class SeleniumParse:
             print(f'Error DF: \n {exp}')
 
     def start(self):
-        vpn_status = OpenVPN().get_connect()
+        # vpn_status = OpenVPN().get_connect()
+        vpn_status = self.open_vpn.get_connect()
         if vpn_status.get('status') == 'connect':
-            selen = SeleniumParse(self.articles_with_catalog, self.arts).set_city_and_get_data_over_vpn()
+            selen = self.set_city_and_get_data_over_vpn()
             if selen.get('status') == 'ban_vpn':
                 self.start()
             elif selen.get('status') == 'Finish':
                 self.create_df()
                 current_date = date.today()
+                last_art = ''
+                if len(self.result_arts) > 0:
+                    last_art = self.result_arts[-1][5:]
                 XLS().create_from_one_df(self.df_each_product, 'Товары',
                                          f'offmag_{self.articles_with_catalog[0][14:]}_'
-                                         f'{self.result_arts[-1]}_{current_date}')
+                                         f'{last_art}_{current_date}')
         elif vpn_status.get('status') == 'ended_vpn':
             self.create_df()
             current_date = date.today()
+            last_art = ''
+            if len(self.result_arts) > 0:
+                last_art = self.result_arts[-1][5:]
             XLS().create_from_one_df(self.df_each_product, 'Товары',
                                      f'offmag_{self.articles_with_catalog[0][14:]}_'
-                                     f'{self.result_arts[-1]}_{current_date}')
+                                     f'{last_art}_{current_date}')
 
 
 class OpenVPN:
@@ -343,7 +354,8 @@ class OpenVPN:
     def get_connect(self):
         os.system(rf'"C:\Program Files\OpenVPN\bin\openvpn-gui.exe" --command disconnect_all')
         for cnf in enumerate(self.dir_list_config):
-            if cnf in self.used_vpn:
+            print(f'TRY connect to VPN: {cnf}')
+            if cnf[1] in self.used_vpn:
                 continue
             else:
                 os.system(rf'"C:\Program Files\OpenVPN\bin\openvpn-gui.exe" --command connect {cnf[1]}')
@@ -352,11 +364,13 @@ class OpenVPN:
                     for line in log:
                         if self.connect_msg in line:
                             print(line)
+                            print(f'connect VPN: {cnf}')
                             self.used_vpn.append(cnf[1])
                             return {'status': 'connect', 'index_vpn': self.dir_list_config.index(cnf[1]),
                                     'name_vpn': self.dir_list_config[cnf[0]]}
                 os.system(rf'"C:\Program Files\OpenVPN\bin\openvpn-gui.exe" --command disconnect {cnf[1]}')
                 continue
+        print('ended_vpn')
         return {'status': 'ended_vpn'}
 
 
