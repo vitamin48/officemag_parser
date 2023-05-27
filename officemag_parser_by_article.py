@@ -73,7 +73,8 @@ class SeleniumParse:
         try:
             browser.get('https://ipinfo.io/json')
             browser.get(self.__main_url)
-            city_btn = browser.find_element(By.XPATH, '/html/body/div[2]/div[1]/div/ul[2]/li[1]/a')
+            browser.implicitly_wait(15)
+            city_btn = browser.find_element(By.XPATH, '/html/body/div[3]/div[1]/div/ul[2]/li[1]/a')
             city_btn.click()
             time.sleep(4)
             br_city = browser.find_element(By.XPATH,
@@ -94,7 +95,8 @@ class SeleniumParse:
                     if re.search(r'\d{3}', art):
                         try:
                             browser.get(self.__main_url + art)
-                            time.sleep(1.5)
+                            browser.implicitly_wait(15)
+                            time.sleep(0.1)
                             soup = BeautifulSoup(browser.page_source, 'lxml')
                             registration = soup.find('div', class_='registrationHintDescription')
                             if registration:
@@ -107,7 +109,7 @@ class SeleniumParse:
                         except Exception as exp:
                             print(f'{bcolors.FAIL}VPN перестал отвечать во время работы.{bcolors.ENDC}')
                             print(exp)
-                            print('=' * 10)
+                            print('=' * 50)
                             browser.close()
                             browser.quit()
                             return {'status': 'ban_vpn'}
@@ -147,6 +149,10 @@ class SeleniumParse:
             else:
                 print(f'{bcolors.WARNING}Product__name отсутствует{bcolors.ENDC}')
                 check_list.append('-')
+            for removed_art in soup.findAll('div', class_='ProductState ProductState--red'):
+                if removed_art.text == 'Выведен из\xa0ассортимента':
+                    print(f'{bcolors.WARNING}Товар {current_art} выведен из ассортимента{bcolors.ENDC}')
+                    check_list.append('-')
             if '-' not in check_list:
                 print(f'Товар {current_art} проходит фильтры +')
                 # self.update_arts.append(art)
@@ -178,7 +184,8 @@ class SeleniumParse:
         self.brand.append(brand)
         name = soup.find('div', class_='Product__name').text
         self.product_name.append(name)
-        if soup.find('span', class_='Price Price--best'):
+        price_div = soup.find('div', class_='Product__priceWrapper')
+        if price_div.find('span', class_='Price Price--best'):
             price = float((soup.find('span', class_='Price Price--best').find('span', class_='Price__count').text +
                            '.' + soup.find('span', class_='Price Price--best').
                            find('span', class_='Price__penny').text).replace(' ', '').replace(u'\xa0', ''))
@@ -354,17 +361,17 @@ class OpenVPN:
     def get_connect(self):
         os.system(rf'"C:\Program Files\OpenVPN\bin\openvpn-gui.exe" --command disconnect_all')
         for cnf in enumerate(self.dir_list_config):
-            print(f'TRY connect to VPN: {cnf}')
             if cnf[1] in self.used_vpn:
                 continue
             else:
+                print(f'TRY connect to VPN: {cnf}')
                 os.system(rf'"C:\Program Files\OpenVPN\bin\openvpn-gui.exe" --command connect {cnf[1]}')
                 time.sleep(30)
                 with open(self.path_logs + self.dir_list_logs[cnf[0]], 'r') as log:
                     for line in log:
                         if self.connect_msg in line:
-                            print(line)
-                            print(f'connect VPN: {cnf}')
+                            print(line.strip())
+                            print(f'{bcolors.OKGREEN}connect to VPN: {cnf}{bcolors.ENDC}')
                             self.used_vpn.append(cnf[1])
                             return {'status': 'connect', 'index_vpn': self.dir_list_config.index(cnf[1]),
                                     'name_vpn': self.dir_list_config[cnf[0]]}
