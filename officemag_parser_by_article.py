@@ -69,7 +69,7 @@ class SeleniumParse:
     def set_city_and_get_data_over_vpn(self):
         self.options.add_argument('--blink-settings=imagesEnabled=false')
         browser = webdriver.Chrome(service=self.service, options=self.options)
-        browser.set_page_load_timeout(50)
+        browser.set_page_load_timeout(59)
         try:
             browser.get('https://ipinfo.io/json')
             browser.get(self.__main_url)
@@ -95,7 +95,7 @@ class SeleniumParse:
                     if re.search(r'\d{3}', art):
                         try:
                             browser.get(self.__main_url + art)
-                            browser.implicitly_wait(15)
+                            browser.implicitly_wait(40)
                             time.sleep(0.1)
                             soup = BeautifulSoup(browser.page_source, 'lxml')
                             registration = soup.find('div', class_='registrationHintDescription')
@@ -132,13 +132,13 @@ class SeleniumParse:
                 len(self.features_package_length_list) == len(self.features_manufacturer_list) == \
                 len(self.url_main_img_add_list) == len(self.url_img_add_list):
             check_list = []
-            if soup.find('div', class_='ProductState ProductState--red'):
-                red_product_state = soup.find('div', class_='ProductState ProductState--red').text
-                if red_product_state == 'Недоступен к\xa0заказу':
-                    check_list.append('-')
-                    print(f'{bcolors.WARNING}Товар {current_art} недоступен к заказу{bcolors.ENDC}')
-            else:
-                check_list.append('+')
+            # if soup.find('div', class_='ProductState ProductState--red'):
+            #     red_product_state = soup.find('div', class_='ProductState ProductState--red').text
+            #     if red_product_state == 'Недоступен к\xa0заказу':
+            #         check_list.append('-')
+            #         print(f'{bcolors.WARNING}Товар {current_art} недоступен к заказу{bcolors.ENDC}')
+            # else:
+            #     check_list.append('+')
             if soup.find('div', class_='Product__name'):
                 if any(ext.lower() in soup.find('div', class_='Product__name').text.lower() for ext in
                        self.bad_brand_list):
@@ -152,6 +152,9 @@ class SeleniumParse:
             for removed_art in soup.findAll('div', class_='ProductState ProductState--red'):
                 if removed_art.text == 'Выведен из\xa0ассортимента':
                     print(f'{bcolors.WARNING}Товар {current_art} выведен из ассортимента{bcolors.ENDC}')
+                    check_list.append('-')
+                elif removed_art.text == 'Недоступен к\xa0заказу':
+                    print(f'{bcolors.WARNING}Товар {current_art} недоступен к заказу{bcolors.ENDC}')
                     check_list.append('-')
             if '-' not in check_list:
                 print(f'Товар {current_art} проходит фильтры +')

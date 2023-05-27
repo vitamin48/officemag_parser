@@ -617,13 +617,13 @@ class SeleniumParse:
                 len(self.features_package_length_list) == len(self.features_manufacturer_list) == \
                 len(self.url_main_img_add_list) == len(self.url_img_add_list):
             check_list = []
-            if soup.find('div', class_='ProductState ProductState--red'):
-                red_product_state = soup.find('div', class_='ProductState ProductState--red').text
-                if red_product_state == 'Недоступен к\xa0заказу':
-                    check_list.append('-')
-                    print(f'{bcolors.WARNING}Товар {current_art} недоступен к заказу{bcolors.ENDC}')
-            else:
-                check_list.append('+')
+            # if soup.find('div', class_='ProductState ProductState--red'):
+            #     red_product_state = soup.find('div', class_='ProductState ProductState--red').text
+            #     if red_product_state == 'Недоступен к\xa0заказу':
+            #         check_list.append('-')
+            #         print(f'{bcolors.WARNING}Товар {current_art} недоступен к заказу{bcolors.ENDC}')
+            # else:
+            #     check_list.append('+')
             if soup.find('div', class_='Product__name'):
                 if any(ext.lower() in soup.find('div', class_='Product__name').text.lower() for ext in
                        self.bad_brand_list):
