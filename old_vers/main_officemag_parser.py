@@ -496,7 +496,7 @@ class SeleniumParse:
         self.__main_url = 'https://www.officemag.ru/'
         self.options = Options()
         self.options.add_argument("--start-maximized")
-        self.service = Service('chromedriver.exe')
+        self.service = Service('../chromedriver.exe')
         # self.browser = webdriver.Chrome(service=self.service, options=self.options)
         self.soup_list = []
         self.articles_with_catalog = articles_with_catalog
@@ -894,7 +894,7 @@ class Catalog:
         self.__main_url = 'https://www.officemag.ru'
         self.options = Options()
         self.options.add_argument("--start-maximized")
-        self.service = Service('chromedriver.exe')
+        self.service = Service('../chromedriver.exe')
 
     def set_city(self):
         browser = webdriver.Chrome(service=self.service, options=self.options)
