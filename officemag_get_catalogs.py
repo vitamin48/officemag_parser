@@ -46,4 +46,4 @@ if __name__ == '__main__':
     # save_html()
     soup = get_soup_by_html(path_to_html='result\\page_content_catalogs.html')
     catalog_links = get_catalog_links(soup)
-    save_catalog_links(path_to_save='result\\catalog_links.txt', catalog_links=catalog_links)
+    save_catalog_links(path_to_save='result\\catalogs.txt', catalog_links=catalog_links)
