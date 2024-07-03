@@ -101,6 +101,17 @@ class OfficeMagParser:
         self.page.get_by_label("Пароль").fill(PASS)
         self.page.get_by_role("button", name="Войти").click()
 
+    def get_data_by_page(self, product):
+        soup = BeautifulSoup(self.page.content(), 'lxml')
+        product_name = self.page.locator('div.ProductHead__name').text_content()
+        price = self.page.locator('span.Price__count').text_content()
+        brand = self.page.locator('span.ProductBrand__name').text_content()
+        description = self.page.locator('div.infoDescription').text_content()
+        characteristics = self.page.locator('ul.infoFeatures').text_content()
+        # Остатки
+        rows = self.page.query_selector_all('.AvailabilityList tbody .AvailabilityItem')
+        print()
+
     def get_data_by_art_links(self):
         """Перебор по ссылкам на товары, получение данных"""
         for product in tqdm(self.product_list):
@@ -112,8 +123,7 @@ class OfficeMagParser:
                     # Переход к странице товара
                     print(f'Загружаю страницу: {product}')
                     response = self.page.goto(product, timeout=30000)
-                    product_name = self.page.locator('div.ProductHead__name')
-                    text = product_name.text_content()
+                    self.get_data_by_page(product)
                     print()
                 except Exception as exp:
                     # Обработка исключений при загрузке страницы
@@ -133,7 +143,7 @@ class OfficeMagParser:
                         break
 
     def start(self):
-        self.authorization()
+        # self.authorization()
         self.get_data_by_art_links()
         print()
 
