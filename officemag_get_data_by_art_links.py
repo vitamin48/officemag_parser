@@ -112,11 +112,9 @@ class OfficeMagParser:
                     # Переход к странице товара
                     print(f'Загружаю страницу: {product}')
                     response = self.page.goto(product, timeout=30000)
-                    # content = self.page.content()  # Получаем HTML содержимое страницы
-                    # with open("result/page_content_art.html", 'w', encoding='utf-8') as f:
-                    #     f.write(content)
-                    # self.browser.close()
-                    # break
+                    product_name = self.page.locator('div.ProductHead__name')
+                    text = product_name.text_content()
+                    print()
                 except Exception as exp:
                     # Обработка исключений при загрузке страницы
                     traceback_str = traceback.format_exc()
@@ -158,6 +156,4 @@ def main():
 
 
 if __name__ == '__main__':
-    # main()
-    soup = get_soup_by_html(path_to_html='result/page_content_art.html')
-    print()
+    main()
