@@ -69,7 +69,7 @@ class OfficeMag:
             f.write(content)
         self.browser.close()
 
-    def set_city(self):
+    def authorization(self):
         self.page.goto("https://www.officemag.ru/auth/")
         self.page.locator("#fancybox-close").click()
         self.page.get_by_label("Электронная почта или логин").click()
@@ -98,7 +98,7 @@ class OfficeMag:
 
     def start(self):
         # self.save_page_as_html(url_test, 'result\\example_catalog.html')
-        self.set_city()
+        self.authorization()
         self.get_arts_from_catalogs()
         print()
 
