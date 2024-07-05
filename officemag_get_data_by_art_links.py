@@ -44,7 +44,7 @@ def read_art_links_from_txt():
 
 def add_bad_req(art, error=''):
     """Запись в файл ссылок, которые не удалось загрузить, либо другая ошибка с указанием этой ошибки"""
-    with open('out/articles_with_bad_req.txt', 'a') as output:
+    with open('result/articles_with_bad_req.txt', 'a') as output:
         if error == '':
             output.write(f'{art}\n')
         else:
@@ -108,6 +108,36 @@ class OfficeMagParser:
 
     def get_data_by_page(self, product):
         soup = BeautifulSoup(self.page.content(), 'lxml')
+        "Код (Артикул)"
+        code = product.split('/')[-2]
+        "Проверяем, доступен ли товар для заказа"
+        product_state_div = soup.find('div', class_='ProductState ProductState--red',
+                                      string="Недоступен к заказу")
+        if product_state_div:
+            add_bad_req(product, error='Недоступен_к_заказу')
+            print(f'{bcolors.WARNING}{code} Недоступен к заказу{bcolors.ENDC}')
+            return
+        "Проверяем, выведен ли товар из ассортимента"
+        product_state_div2 = soup.find('div', class_='ProductState ProductState--red',
+                                       string=re.compile(r'^Выведен из'))
+        if product_state_div2:
+            add_bad_req(product, error='Выведен_из_ассортимента')
+            print(f'{bcolors.WARNING}{code} Выведен из ассортимента{bcolors.ENDC}')
+            return
+        # if soup.find('div',class_='ProductState ProductState--red'):
+        #     status = soup.find('div',class_='ProductState ProductState--red').text
+        #     if status == 'Недоступен к&nbsp;заказу':
+        #         add_bad_req(product, error='Недоступен_к_заказу')
+        #         print(f'{bcolors.WARNING}Недоступен к заказу{bcolors.ENDC}')
+        #         return
+        #     elif status == 'Есть только в другом сочетании':
+        #         add_bad_req(product, error='Недоступен_к_заказу')
+        #         print(f'{bcolors.WARNING}Недоступен к заказу (Есть только в другом сочетании){bcolors.ENDC}')
+        #         return
+        #     elif status == 'Временно отсутствует на складе':
+        #         print(f'Временно отсутствует на складе')
+        #     else:
+        #         input(f'{bcolors.OKBLUE}Недоступен_к_заказу особый случай{bcolors.ENDC}')
         "характеристики"
         # Находим блок "Подробнее о товаре"
         details_section = soup.find('div', class_='TabsContentSpoiler__content')
@@ -154,10 +184,14 @@ class OfficeMagParser:
         "Бренд"
         brand = soup.find('span', class_='ProductBrand__name').text.strip()
         "Изображения"
-        images_soup = soup.find('ul', class_='ProductPhotoThumbs').find_all('a', class_='ProductPhotoThumb__link')
-        image_urls = [link['href'] for link in images_soup]
-        "Код (Артикул)"
-        code = product.split('/')[-2]
+        if soup.find('ul', class_='ProductPhotoThumbs'):
+            images_soup = (soup.find('ul', class_='ProductPhotoThumbs')
+                           .find_all('a', class_='ProductPhotoThumb__link'))
+            image_urls = [link['href'] for link in images_soup]
+        elif soup.find('span', class_='main js-photoTarget'):
+            image_urls = soup.find('a', class_='itemInfoPhotos__link')['href']  # случай, когда изображение одно
+        else:
+            input(f'{bcolors.OKBLUE}Не найдены изображения особый случай{bcolors.OKBLUE}')
         "Название"
         name = soup.find('div', class_='ProductHead__name').text.strip()
         "Цена"
@@ -171,8 +205,8 @@ class OfficeMagParser:
             price = (price_soup.find('div', class_='Price Price--best js-priceBigCard js-PriceWrap')
                      .find('span', class_='Price__count').text.strip())
         if price == 0:
-            input('Цена 0!')
-        print(price)
+            input(f'{bcolors.OKBLUE}Цена 0! Особый случай{bcolors.ENDC}')
+        # print(price)
         "Формируем результирующий словарь с данными"
         self.res_dict[code] = {'name': name, 'price': price, 'stock': data_stocks, 'description': description,
                                'characteristics': characteristics_dict,
@@ -202,7 +236,7 @@ class OfficeMagParser:
                     retry_count += 1
                     if retry_count < max_retries:
                         print(f'Ждем {timeout_for_load_page} cекунд, затем делаем попытку №{retry_count} '
-                              f'из {max_retries - retry_count}.')
+                              f'из {max_retries - 1}.')
                         time.sleep(timeout_for_load_page)
                     else:
                         # Если превышено количество попыток
