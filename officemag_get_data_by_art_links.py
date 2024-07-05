@@ -51,6 +51,11 @@ def add_bad_req(art, error=''):
             output.write(f'{error}\t{art}\n')
 
 
+def write_json(res_dict):
+    with open('result/data.json', 'w', encoding='utf-8') as json_file:
+        json.dump(res_dict, json_file, indent=2, ensure_ascii=False)
+
+
 def send_logs_to_telegram(message):
     """Отправка уведомления в Telegram"""
     import platform
@@ -103,14 +108,77 @@ class OfficeMagParser:
 
     def get_data_by_page(self, product):
         soup = BeautifulSoup(self.page.content(), 'lxml')
-        product_name = self.page.locator('div.ProductHead__name').text_content()
-        price = self.page.locator('span.Price__count').text_content()
-        brand = self.page.locator('span.ProductBrand__name').text_content()
-        description = self.page.locator('div.infoDescription').text_content()
-        characteristics = self.page.locator('ul.infoFeatures').text_content()
-        # Остатки
-        rows = self.page.query_selector_all('.AvailabilityList tbody .AvailabilityItem')
-        print()
+        "характеристики"
+        # Находим блок "Подробнее о товаре"
+        details_section = soup.find('div', class_='TabsContentSpoiler__content')
+        characteristics_dict = {}
+        characteristics_text_list = []
+        if details_section:
+            # Находим все элементы списка характеристик
+            characteristics_list = details_section.find('ul', class_='infoFeatures')
+            if characteristics_list:
+                # Извлекаем текст каждого элемента списка
+                for item in characteristics_list.find_all('li'):
+                    text = item.get_text(strip=True)
+                    # Ищем разделители "-" и ":"
+                    if "—" in text:
+                        key, value = text.split("—", 1)
+                    elif ":" in text:
+                        key, value = text.split(":", 1)
+                    else:
+                        # Если разделителей нет, пропускаем элемент
+                        continue
+                    characteristics_dict[key.strip()] = value.strip()
+                    characteristics_text_list.append(text)
+        result_characteristics_text = " ".join(characteristics_text_list)
+        "остатки"
+        div_stocks = soup.find('div', class_='tabsContent js-tabsContent js-tabsContentMobile')
+        rows = div_stocks.find_all('tr', class_='AvailabilityItem')
+        data_stocks = {}
+        for row in rows:
+            store_cell = row.find('td', class_='AvailabilityBox')
+            store_name = store_cell.find('span', class_='AvailabilityLabel').text.strip()
+            # Извлекаем данные из второй ячейки (наличие товара)
+            availability_cell = row.find('td', class_='AvailabilityBox AvailabilityBox--green')
+            if availability_cell:
+                availability = availability_cell.text.strip()
+            else:
+                availability = 0
+            # Записываем данные в словарь
+            data_stocks[store_name] = availability
+        "Описание"
+        description = (soup.find('div', class_='infoDescription').text.replace('Описание', '')
+                       .replace('\n\n', ' ')).replace('\n', ' ').strip()
+        # Добавляем к описанию характеристики
+        description = description + ' ' + result_characteristics_text
+        "Бренд"
+        brand = soup.find('span', class_='ProductBrand__name').text.strip()
+        "Изображения"
+        images_soup = soup.find('ul', class_='ProductPhotoThumbs').find_all('a', class_='ProductPhotoThumb__link')
+        image_urls = [link['href'] for link in images_soup]
+        "Код (Артикул)"
+        code = product.split('/')[-2]
+        "Название"
+        name = soup.find('div', class_='ProductHead__name').text.strip()
+        "Цена"
+        # price = soup.find('span', class_='Price__count').text.strip()
+        price_soup = soup.find('div', class_='order')
+        price = 0
+        if price_soup.find('div', class_='Product__price js-itemPropToRemove js-detailCardGoods'):
+            price = (price_soup.find('div', class_='Product__price js-itemPropToRemove js-detailCardGoods')
+                     .find('span', class_='Price__count').text.strip())
+        elif price_soup.find('div', class_='Price Price--best js-priceBigCard js-PriceWrap'):
+            price = (price_soup.find('div', class_='Price Price--best js-priceBigCard js-PriceWrap')
+                     .find('span', class_='Price__count').text.strip())
+        if price == 0:
+            input('Цена 0!')
+        print(price)
+        "Формируем результирующий словарь с данными"
+        self.res_dict[code] = {'name': name, 'price': price, 'stock': data_stocks, 'description': description,
+                               'characteristics': characteristics_dict,
+                               'img_urls': image_urls, 'art_url': product, 'code': code, 'brand': brand}
+        write_json(res_dict=self.res_dict)
+        # print()
 
     def get_data_by_art_links(self):
         """Перебор по ссылкам на товары, получение данных"""
@@ -124,7 +192,7 @@ class OfficeMagParser:
                     print(f'Загружаю страницу: {product}')
                     response = self.page.goto(product, timeout=30000)
                     self.get_data_by_page(product)
-                    print()
+                    break
                 except Exception as exp:
                     # Обработка исключений при загрузке страницы
                     traceback_str = traceback.format_exc()
@@ -143,7 +211,7 @@ class OfficeMagParser:
                         break
 
     def start(self):
-        # self.authorization()
+        self.authorization()
         self.get_data_by_art_links()
         print()
 
