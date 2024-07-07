@@ -17,7 +17,7 @@ import json
 import traceback
 from bs4 import BeautifulSoup
 from playwright.sync_api import sync_playwright
-from officemag_get_arts_by_catalogs import get_soup_by_html
+from officemag_get_arts_by_catalogs_step2 import get_soup_by_html
 
 LOGIN = 'ropad99662@htoal.com'
 PASS = 'kKNkK4ZL$Ci6/ct'
@@ -96,6 +96,17 @@ class OfficeMagParser:
         self.context = self.browser.new_context()
         self.page = self.context.new_page()
         self.page.add_init_script(js)
+
+    def restart_browser(self):
+        # Закрытие текущего контекста и браузера
+        if self.page:
+            self.page.close()
+        if self.context:
+            self.context.close()
+        if self.browser:
+            self.browser.close()
+        # Перезапуск браузера и создание нового контекста и страницы
+        self.set_playwright_config(self.playwright)
 
     def authorization(self):
         self.page.goto("https://www.officemag.ru/auth/")
@@ -182,7 +193,11 @@ class OfficeMagParser:
         # Добавляем к описанию характеристики
         description = description + ' ' + result_characteristics_text
         "Бренд"
-        brand = soup.find('span', class_='ProductBrand__name').text.strip()
+        brand = soup.find('span', class_='ProductBrand__name')
+        if brand:
+            brand = brand.text.strip()
+        else:
+            brand = 'NoName'
         "Изображения"
         if soup.find('ul', class_='ProductPhotoThumbs'):
             images_soup = (soup.find('ul', class_='ProductPhotoThumbs')
@@ -219,7 +234,7 @@ class OfficeMagParser:
         for product in tqdm(self.product_list):
             retry_count = 1  # Минимальное количество попыток загрузки страницы
             max_retries = 4  # Максимальное количество попыток загрузки страницы
-            timeout_for_load_page = 60
+            timeout_for_load_page = 100
             while retry_count < max_retries:
                 try:
                     # Переход к странице товара
@@ -236,12 +251,18 @@ class OfficeMagParser:
                     retry_count += 1
                     if retry_count < max_retries:
                         print(f'Ждем {timeout_for_load_page} cекунд, затем делаем попытку №{retry_count} '
-                              f'из {max_retries - 1}.')
+                              f'из {max_retries - 1}. Также перезапускаем браузер.')
+                        time.sleep(5)
+                        self.restart_browser()
                         time.sleep(timeout_for_load_page)
+                        self.authorization()
                     else:
                         # Если превышено количество попыток
-                        print(f'Превышено количество попыток для товара, в файл добавлено: {product}')
+                        print(f'Превышено количество попыток для товара, в файл лога ошибок добавлено: {product}')
                         add_bad_req(product, error='Превышено_количество_попыток_для_загрузки_страницы_товара')
+                        send_logs_to_telegram(message=f'Скрипт на паузе. Превышено количество попыток для загрузки '
+                                                      f'страницы товара: \n{product}')
+                        input('Пауза')
                         break
 
     def start(self):
