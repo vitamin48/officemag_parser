@@ -2,6 +2,7 @@
 Скрипт считывает файл JSON с товарами Офисмаг и записывает данные в Excel.
 """
 import json
+import re
 import pandas as pd
 
 from openpyxl.utils import get_column_letter
@@ -22,12 +23,27 @@ def read_bad_brand():
     return set(brands)
 
 
+def check_key_in_dict(key):
+    check_list = ['NO_KEY_brand', 'NO_KEY_country']
+    if key in check_list:
+        input(key)
+
+
 def create_df_by_dict(data_dict):
     rows = []
     # Проходим по каждому ключу в словаре
     for key, value in data_dict.items():
+        brand = value.get('brand', 'NO_KEY')
+        name = value.get('name')
         # Обработка характеристик
         characteristics = value.get("characteristics", {})
+        country = characteristics.get('Производитель', 'NO_KEY')
+        # Обработка Высота х Длина х Ширина
+        dimensions = characteristics.get('Размер в упаковке', 'NO_KEY')
+        modified_dimensions = re.sub(r'\s*см', '', dimensions)
+        height, length, width = map(lambda x: round(float(x) * 10), modified_dimensions.split('x'))
+        print()
+    print()
 
 
 if __name__ == '__main__':
