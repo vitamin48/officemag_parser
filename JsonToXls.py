@@ -35,9 +35,23 @@ def extract_numbers(input_string):
     return int(''.join([char for char in str(input_string) if char.isdigit()]))
 
 
-def create_df_by_dict(data_dict):
+def transform_price(x):
+    result = x * 5 if x < 200 else (
+        x * 4.5 if 200 <= x < 500 else (
+            x * 4 if 500 <= x < 1000 else (
+                x * 3.5 if 1000 <= x < 5000 else (
+                    x * 3 if 5000 <= x < 10000 else (
+                        x * 2.5 if 10000 <= x < 20000 else (x * 2))))))
+    # Убеждаемся, что значение после преобразований не меньше 490
+    result = max(result, 490)
+    # Округление до целого числа
+    return round(result)
+
+
+def create_rows_for_df_by_dict(data_dict):
     bad_brands = read_bad_brand()
-    rows = []
+    rows_main = []
+    rows_stock = []
     # Проходим по каждому ключу в словаре
     for key, value in data_dict.items():
         brand = value.get('brand', 'NO_KEY')
@@ -71,30 +85,79 @@ def create_df_by_dict(data_dict):
         krasnoarmeyskaya = extract_numbers(stock.get('г. Брянск, ул. Красноармейская, 93Б, ТЦ Профиль', 0))
         sovetskaya = extract_numbers(stock.get('г. Брянск, ул. Советская, д. 99', 0))
         bezhitsa = extract_numbers(stock.get('г. Брянск, ул. 3-го Интернационала, 13***СКОРО ОТКРЫТИЕ 15.07.2024', 0))
+        "Описание"
+        description = value.get("description", "")
+        description = description.replace('НДС: 20%', '').replace(' ', ' ')
+        "Изображения"
+        img_urls = value.get("img_urls", [])
+        if isinstance(img_urls, str):
+            img_urls = [img_urls]
+        if len(img_urls) > 0:  # Извлечение первой ссылки и всех остальных
+            img_url1 = img_urls[0]
+            img_url2 = img_urls[1:]  # Все остальные ссылки
+            # Преобразуем список ссылок в строку, разделенную запятой, или оставляем как есть.
+            img_url2 = ", ".join(img_url2) if len(img_url2) > 0 else "-"
+        else:
+            img_url1 = "-"
+            img_url2 = "-"
+        "Формируем итоговую главную строку"
         row = {
             "ArtNumber": key,
             "Название": name,
             "Цена Офисмага": modified_price,
-            "Остатки": value.get("stock", ""),
-            "Описание": value.get("description", ""),
-            # "Ссылка на главное фото товара": img_url1,
-            # "Ссылки на другие фото товара": img_url2,
+            "Описание": description,
+            "Ссылка на главное фото товара": img_url1,
+            "Ссылки на другие фото товара": img_url2,
             "art_url": value.get("art_url", ""),
             "Бренд": brand,
             "Страна": country,
             "Ширина, мм": width,
             "Высота, мм": height,
             "Длина, мм": length,
-            "Характеристики": str(characteristics),
+            "Характеристики": str(characteristics).replace('\\xa0', '')
         }
-        print()
-    print()
+        "Формируем строку с остатками"
+        row_stock = {
+            "ArtNumber": f'goods_{key}',
+            "Название": name,
+            "Остатки Крс+Сов": krasnoarmeyskaya + sovetskaya,
+            "Остатки на складе в Брянске": warehouse_bryansk,
+            "Остатки на удаленном складе": remote_warehouse,
+            "Остатки на Красноармейской": krasnoarmeyskaya,
+            "Остатки на Советской": sovetskaya,
+            "Остатки в Бежице": bezhitsa
+        }
+        rows_main.append(row)
+        rows_stock.append(row_stock)
+    return rows_main, rows_stock
+
+
+def create_df_by_rows(rows_main, rows_stock):
+    # Создание DataFrame из списка словарей
+    df_main = pd.DataFrame(rows_main)
+    df_stock = pd.DataFrame(rows_stock)
+    # Добавляем артикул
+    df_main["Артикул"] = df_main["ArtNumber"].apply(lambda art: f'goods_{art}')
+    # Добавляем столбец Цена для OZON
+    df_main['Цена для OZON'] = df_main['Цена Офисмага'].apply(transform_price)
+    # Добавляем столбец Цена до скидки
+    df_main['Цена до скидки'] = df_main['Цена для OZON'].apply(lambda x: int(round(x * 1.3)))
+    # Добавляем столбец НДС Не облагается
+    df_main["НДС"] = "Не облагается"
+    # Задаем порядок столбцов
+    desired_order = ['Артикул', 'Название', 'Цена для OZON', 'Цена до скидки', 'НДС', 'Цена Офисмага',
+                     'Ширина, мм', 'Высота, мм', 'Длина, мм', 'Ссылка на главное фото товара',
+                     'Ссылки на другие фото товара', 'Бренд', 'ArtNumber', 'Описание', 'Страна',
+                     'Характеристики', 'art_url']
+    result_main_df = df_main[desired_order]
+    return result_main_df, df_stock
 
 
 if __name__ == '__main__':
     data_json = read_json()
     excluded_brands = read_bad_brand()
-    create_df_by_dict(data_dict=data_json)
+    rows_main, rows_stock = create_rows_for_df_by_dict(data_dict=data_json)
+    df_main, df_stock = create_df_by_rows(rows_main, rows_stock)
     print()
     # df = create_df_by_dict(data_dict=data_json)
     # create_xls(df)
