@@ -7,7 +7,7 @@ import pandas as pd
 
 from openpyxl.utils import get_column_letter
 
-FILE_NAME_JSON = 'result/data_1.json'
+FILE_NAME_JSON = 'result/result_merge_data.json'
 
 
 def read_json():
@@ -77,6 +77,9 @@ def create_rows_for_df_by_dict(data_dict):
         "Цена"
         price = value.get('price', 'NO_KEY')
         modified_price = round(float(re.sub(r'\s*', '', price)))
+        """Доп проверка, выбрать только те товары, в закупе которые стоят дороже 1900 р"""
+        if modified_price < 1900:
+            continue
         "Остатки"
         stock = value.get('stock')
         warehouse_bryansk = extract_numbers(stock.get('Наличие на складе в Брянске', 0))
@@ -85,6 +88,12 @@ def create_rows_for_df_by_dict(data_dict):
         krasnoarmeyskaya = extract_numbers(stock.get('г. Брянск, ул. Красноармейская, 93Б, ТЦ Профиль', 0))
         sovetskaya = extract_numbers(stock.get('г. Брянск, ул. Советская, д. 99', 0))
         bezhitsa = extract_numbers(stock.get('г. Брянск, ул. 3-го Интернационала, 13***СКОРО ОТКРЫТИЕ 15.07.2024', 0))
+        """Дополнительное условие, если остатки товаров суммарно на Красноармейской и Советской равны 0, 
+        то такие товары пропускаем, либо нет"""
+        if krasnoarmeyskaya + sovetskaya != 0:
+            continue
+        if warehouse_bryansk < 30:
+            continue
         "Описание"
         description = value.get("description", "")
         description = description.replace('НДС: 20%', '').replace(' ', ' ')
@@ -153,11 +162,47 @@ def create_df_by_rows(rows_main, rows_stock):
     return result_main_df, df_stock
 
 
+def create_xls(df_main, df_stock):
+    file_name = f'result\\OfficeMag.xlsx'
+    # Сохранение DataFrame в Excel с использованием Styler
+    with pd.ExcelWriter(file_name, engine='openpyxl') as writer:
+        df_main.to_excel(writer, sheet_name='Данные', index=False, na_rep='NaN')
+        df_stock.to_excel(writer, sheet_name='Остатки', index=False, na_rep='NaN')
+        "Работа с данными"
+        # Установка ширины столбцов
+        worksheet_ozon = writer.sheets['Данные']
+        for column in df_main:
+            column_width = max(df_main[column].astype(str).map(len).max(), len(column)) + 2
+            col_letter = get_column_letter(df_main.columns.get_loc(column) + 1)
+            worksheet_ozon.column_dimensions[col_letter].width = column_width
+        # Закрепите первую строку
+        worksheet_ozon.freeze_panes = 'A2'
+        # Корректировка ширины столбцов
+        worksheet_ozon.column_dimensions[get_column_letter(df_main.columns.get_loc('Название') + 1)].width = 30
+        worksheet_ozon.column_dimensions[get_column_letter(df_main.columns.get_loc('Описание') + 1)].width = 30
+        worksheet_ozon.column_dimensions[get_column_letter(df_main.columns.get_loc('Характеристики') + 1)].width = 30
+        worksheet_ozon.column_dimensions[
+            get_column_letter(df_main.columns.get_loc('Ссылка на главное фото товара') + 1)].width = 30
+        worksheet_ozon.column_dimensions[
+            get_column_letter(df_main.columns.get_loc('Ссылки на другие фото товара') + 1)].width = 30
+        worksheet_ozon.column_dimensions[
+            get_column_letter(df_main.columns.get_loc('art_url') + 1)].width = 20
+        "Работа с остатками"
+        worksheet_srock = writer.sheets['Остатки']
+        for column in df_stock:
+            column_width = max(df_stock[column].astype(str).map(len).max(), len(column)) + 2
+            col_letter = get_column_letter(df_stock.columns.get_loc(column) + 1)
+            worksheet_srock.column_dimensions[col_letter].width = column_width
+        # Корректировка ширины столбцов
+        worksheet_srock.column_dimensions[get_column_letter(df_main.columns.get_loc('Название') + 1)].width = 30
+
+
 if __name__ == '__main__':
     data_json = read_json()
     excluded_brands = read_bad_brand()
     rows_main, rows_stock = create_rows_for_df_by_dict(data_dict=data_json)
     df_main, df_stock = create_df_by_rows(rows_main, rows_stock)
+    create_xls(df_main, df_stock)
     print()
     # df = create_df_by_dict(data_dict=data_json)
     # create_xls(df)
