@@ -285,8 +285,6 @@ def main():
         send_logs_to_telegram(message=f'Произошла ошибка!\n\n\n{exp}\n\n{traceback_str}')
     t2 = datetime.datetime.now()
     print(f'Finish: {t2}, TIME: {t2 - t1}')
-    # send_logs_to_telegram(message=f'Finish: {t2}, TIME: {t2 - t1}')
-
 
 if __name__ == '__main__':
     main()
