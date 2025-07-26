@@ -74,12 +74,24 @@ def create_rows_for_df_by_dict(data_dict):
         else:
             modified_dimensions = re.sub(r'\s*см', '', dimensions)
             height, length, width = map(lambda x: round(float(x) * 10), modified_dimensions.split('x'))
+        "Вес"
+        weight = characteristics.get('Вес с упаковкой', 'NO_KEY')
+        if weight == 'NO_KEY':
+            input(f'NO_KEY не найден вес для {key}')
+        if 'кг' in weight:
+            weight = weight.replace(',', '.').replace('кг', '').strip()
+            weight = round(float(weight) * 1000)
+        elif ' г' in weight:
+            weight = weight.replace(',', '.').replace('г', '').strip()
+            weight = int(weight)
+        else:
+            print()
         "Цена"
         price = value.get('price', 'NO_KEY')
         modified_price = round(float(re.sub(r'\s*', '', price)))
-        """Доп проверка, выбрать только те товары, в закупе которые стоят дороже 1900 р"""
-        if modified_price < 1900:
-            continue
+        # """Доп проверка, выбрать только те товары, в закупе которые стоят дороже 1900 р"""
+        # if modified_price < 1900:
+        #     continue
         "Остатки"
         stock = value.get('stock')
         warehouse_bryansk = extract_numbers(stock.get('Наличие на складе в Брянске', 0))
@@ -90,10 +102,10 @@ def create_rows_for_df_by_dict(data_dict):
         bezhitsa = extract_numbers(stock.get('г. Брянск, ул. 3-го Интернационала, 13***СКОРО ОТКРЫТИЕ 15.07.2024', 0))
         """Дополнительное условие, если остатки товаров суммарно на Красноармейской и Советской равны 0, 
         то такие товары пропускаем, либо нет"""
-        if krasnoarmeyskaya + sovetskaya != 0:
+        if krasnoarmeyskaya + sovetskaya == 0:
             continue
-        if warehouse_bryansk < 30:
-            continue
+        # if warehouse_bryansk < 30:
+        #     continue
         "Описание"
         description = value.get("description", "")
         description = description.replace('НДС: 20%', '').replace(' ', ' ')
@@ -120,6 +132,7 @@ def create_rows_for_df_by_dict(data_dict):
             "art_url": value.get("art_url", ""),
             "Бренд": brand,
             "Страна": country,
+            "Вес, г": weight,
             "Ширина, мм": width,
             "Высота, мм": height,
             "Длина, мм": length,
@@ -154,7 +167,7 @@ def create_df_by_rows(rows_main, rows_stock):
     # Добавляем столбец НДС Не облагается
     df_main["НДС"] = "Не облагается"
     # Задаем порядок столбцов
-    desired_order = ['Артикул', 'Название', 'Цена для OZON', 'Цена до скидки', 'НДС', 'Цена Офисмага',
+    desired_order = ['Артикул', 'Название', 'Цена для OZON', 'Цена до скидки', 'НДС', 'Цена Офисмага', 'Вес, г',
                      'Ширина, мм', 'Высота, мм', 'Длина, мм', 'Ссылка на главное фото товара',
                      'Ссылки на другие фото товара', 'Бренд', 'ArtNumber', 'Описание', 'Страна',
                      'Характеристики', 'art_url']
@@ -203,6 +216,6 @@ if __name__ == '__main__':
     rows_main, rows_stock = create_rows_for_df_by_dict(data_dict=data_json)
     df_main, df_stock = create_df_by_rows(rows_main, rows_stock)
     create_xls(df_main, df_stock)
-    print()
+    print('Успешно!')
     # df = create_df_by_dict(data_dict=data_json)
     # create_xls(df)
