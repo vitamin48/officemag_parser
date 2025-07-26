@@ -18,7 +18,7 @@ def read_json():
 
 def read_bad_brand():
     """Считывает и возвращает список нежелательных брендов"""
-    with open('input/bad_brand.txt', 'r', encoding='utf-8') as file:
+    with open('in/bad_brand.txt', 'r', encoding='utf-8') as file:
         brands = [line.strip().lower() for line in file if line.strip()]
     return set(brands)
 
