@@ -52,7 +52,7 @@ def add_bad_req(art, error=''):
 
 
 def write_json(res_dict):
-    with open('result/data.json', 'w', encoding='utf-8') as json_file:
+    with open('old_vers/result/data.json', 'w', encoding='utf-8') as json_file:
         json.dump(res_dict, json_file, indent=2, ensure_ascii=False)
 
 

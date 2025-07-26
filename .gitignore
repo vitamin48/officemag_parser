@@ -53,5 +53,5 @@ secrets.ini
 # Windows
 Thumbs.db
 
-result/
+old_vers/result/
 /catalog_links.txt

@@ -13,13 +13,13 @@ url_test = 'https://www.officemag.ru/catalog/1523/index.php?SORT=SORT&COUNT=60'
 
 def read_catalogs_from_txt():
     """Считывает и возвращает список каталогов из файла"""
-    with open('input/catalogs.txt', 'r', encoding='utf-8') as file:
+    with open('../input/catalogs.txt', 'r', encoding='utf-8') as file:
         catalogs = [f'{line}'.rstrip() for line in file]
     return catalogs
 
 
 def write_catalogs_to_txt(list_to_txt):
-    with open("result\\art_links.txt", "a", encoding="utf-8") as file:
+    with open("result/art_links.txt", "a", encoding="utf-8") as file:
         for item in list_to_txt:
             file.write(f"{item}\n")
 

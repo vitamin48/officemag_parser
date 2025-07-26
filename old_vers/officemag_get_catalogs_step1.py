@@ -14,7 +14,7 @@ def save_html():
     response = requests.get(ABC_CATALOG)
     page_content = response.text
     # Сохранение содержимого страницы в файл
-    with open("result\\page_content_catalogs.html", "w", encoding='utf-8') as file:
+    with open("old_vers/result\\page_content_catalogs.html", "w", encoding='utf-8') as file:
         file.write(page_content)
 
 
@@ -44,6 +44,6 @@ def save_catalog_links(path_to_save, catalog_links):
 
 if __name__ == '__main__':
     # save_html()
-    soup = get_soup_by_html(path_to_html='result\\page_content_catalogs.html')
+    soup = get_soup_by_html(path_to_html='old_vers/result\\page_content_catalogs.html')
     catalog_links = get_catalog_links(soup)
-    save_catalog_links(path_to_save='result\\catalogs.txt', catalog_links=catalog_links)
+    save_catalog_links(path_to_save='old_vers/result\\catalogs.txt', catalog_links=catalog_links)

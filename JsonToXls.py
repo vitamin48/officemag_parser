@@ -7,7 +7,7 @@ import pandas as pd
 
 from openpyxl.utils import get_column_letter
 
-FILE_NAME_JSON = 'result/result_merge_data.json'
+FILE_NAME_JSON = 'old_vers/result/result_merge_data.json'
 
 
 def read_json():
@@ -176,7 +176,7 @@ def create_df_by_rows(rows_main, rows_stock):
 
 
 def create_xls(df_main, df_stock):
-    file_name = f'result\\OfficeMag.xlsx'
+    file_name = f'old_vers/result\\OfficeMag.xlsx'
     # Сохранение DataFrame в Excel с использованием Styler
     with pd.ExcelWriter(file_name, engine='openpyxl') as writer:
         df_main.to_excel(writer, sheet_name='Данные', index=False, na_rep='NaN')
