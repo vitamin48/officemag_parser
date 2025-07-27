@@ -7,7 +7,7 @@ import pandas as pd
 
 from openpyxl.utils import get_column_letter
 
-FILE_NAME_JSON = 'old_vers/result/result_merge_data.json'
+FILE_NAME_JSON = 'out/products_data.json'
 
 
 def read_json():
@@ -88,12 +88,16 @@ def create_rows_for_df_by_dict(data_dict):
             print()
         "Цена"
         price = value.get('price', 'NO_KEY')
-        modified_price = round(float(re.sub(r'\s*', '', price)))
+        # modified_price = round(float(re.sub(r'\s*', '', price)))
+        if isinstance(price, float):
+            modified_price = round(price)
+        else:
+            raise 'modified_price'
         # """Доп проверка, выбрать только те товары, в закупе которые стоят дороже 1900 р"""
         # if modified_price < 1900:
         #     continue
         "Остатки"
-        stock = value.get('stock')
+        stock = value.get('stocks')
         warehouse_bryansk = extract_numbers(stock.get('Наличие на складе в Брянске', 0))
         remote_warehouse = extract_numbers(stock.get('Удаленный склад (срок поставки от 3 дней)',
                                                      stock.get('Удаленный склад (срок поставки от 5 рабочих дней)', 0)))
@@ -176,7 +180,7 @@ def create_df_by_rows(rows_main, rows_stock):
 
 
 def create_xls(df_main, df_stock):
-    file_name = f'old_vers/result\\OfficeMag.xlsx'
+    file_name = f'out/OfficeMag.xlsx'
     # Сохранение DataFrame в Excel с использованием Styler
     with pd.ExcelWriter(file_name, engine='openpyxl') as writer:
         df_main.to_excel(writer, sheet_name='Данные', index=False, na_rep='NaN')

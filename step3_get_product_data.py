@@ -34,7 +34,7 @@ BASE_URL = "https://www.officemag.ru"
 
 HEADLESS_MODE = False
 TIMEOUT = 45000
-MAX_RETRIES = 3
+MAX_RETRIES = 2
 PAUSE_BETWEEN_REQUESTS = (2, 5)
 
 
