@@ -90,6 +90,18 @@ def parse_stock_value(stock_str: str) -> int:
     return int(match.group(1)) if match else 0
 
 
+def clean_illegal_chars(text: str) -> str:
+    """
+    Удаляет из строки нелегальные для XML/Excel управляющие символы.
+    """
+    if not isinstance(text, str):
+        return text
+    # Регулярное выражение для поиска всех управляющих символов ASCII,
+    # кроме разрешенных (табуляция, новая строка, возврат каретки).
+    illegal_chars_re = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f]')
+    return illegal_chars_re.sub('', text)
+
+
 def create_df_by_dict(data_dict):
     """
     Преобразует словарь с данными о товарах в три DataFrame:
@@ -115,11 +127,16 @@ def create_df_by_dict(data_dict):
         img_url2 = ", ".join(image_urls[1:]) if len(image_urls) > 1 else "-"
 
         row = {
-            "ArtNumber": value.get("code", key.replace("goods_", "")), "Название": value.get("name", ""),
-            "Цена Европы": value.get("price", 0), "Описание": value.get("description", ""),
-            "Ссылка на главное фото товара": img_url1, "Ссылки на другие фото товара": img_url2,
-            "art_url": value.get("product_url", ""), "Бренд": value.get("brand", "NoName"),
-            "Характеристики": str(characteristics), "Страна": country, "Вес": weight_g,
+            "ArtNumber": value.get("code", key.replace("goods_", "")),
+            "Название": clean_illegal_chars(value.get("name", "")),
+            "Цена Европы": value.get("price", 0),
+            "Описание": clean_illegal_chars(value.get("description", "")),
+            "Ссылка на главное фото товара": img_url1,
+            "Ссылки на другие фото товара": img_url2,
+            "art_url": value.get("product_url", ""),
+            "Бренд": value.get("brand", "NoName"),
+            "Характеристики": clean_illegal_chars(str(characteristics)),
+            "Страна": country, "Вес": weight_g,
             "Ширина, мм": width_mm, "Высота, мм": height_mm, "Длина, мм": length_mm,
             "raw_stocks": current_stocks
         }
