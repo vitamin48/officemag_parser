@@ -1,9 +1,11 @@
 """
 Скрипт считывает файл JSON с товарами и записывает данные в Excel.
-Формируется 3 листа:
-1. С товарами для маркетплейса (OZON)
-2. Остатки по товарам в разрезе складов
-3. Товары с нежелательными брендами
+Формируется 5 листов:
+1. OZON - все товары для маркетплейса.
+2. OZON_local - товары, доступные для продажи из локальных магазинов.
+3. OZON_remote - товары, доступные для продажи только с удаленных складов.
+4. Остатки - детализация остатков по складам.
+5. Нежелательный бренд - отфильтрованные товары.
 """
 import json
 import pandas as pd
@@ -66,7 +68,6 @@ def transform_price(x):
         result = x * 2
     else:
         result = x * 1.5
-
     return round(max(result, 590))
 
 
@@ -111,25 +112,21 @@ def create_df_by_dict(data_dict):
     for key, value in data_dict.items():
         characteristics = value.get("characteristics", {})
         current_stocks = value.get("stocks", {})
-
         country = characteristics.get("Производитель", "N/A")
         weight_str = characteristics.get("Вес с упаковкой", "0")
         if 'кг' in weight_str.lower():
             weight_g = int(float(re.sub(r'[^0-9,.]', '', weight_str).replace(',', '.')) * 1000)
         else:
             weight_g = int(re.sub(r'[^0-9]', '', weight_str) or 0)
-
         dimensions_str = characteristics.get("Размер в упаковке", "0x0x0")
         width_mm, height_mm, length_mm = parse_dimensions(dimensions_str)
-
         image_urls = value.get("image_urls", [])
         img_url1 = image_urls[0] if image_urls else "-"
         img_url2 = ", ".join(image_urls[1:]) if len(image_urls) > 1 else "-"
-
         row = {
             "ArtNumber": value.get("code", key.replace("goods_", "")),
             "Название": clean_illegal_chars(value.get("name", "")),
-            "Цена Европы": value.get("price", 0),
+            "Цена закупа": value.get("price", 0),
             "Описание": clean_illegal_chars(value.get("description", "")),
             "Ссылка на главное фото товара": img_url1,
             "Ссылки на другие фото товара": img_url2,
@@ -141,58 +138,44 @@ def create_df_by_dict(data_dict):
             "raw_stocks": current_stocks
         }
         all_rows.append(row)
-
     if not all_rows:
         return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
-
     df = pd.DataFrame(all_rows)
     excluded_brands = read_bad_brand()
     df["Бренд_нижний_регистр"] = df["Бренд"].str.lower().str.strip()
     df_filtered = df[~df["Бренд_нижний_регистр"].isin(excluded_brands)].copy()
     df_excluded = df[df["Бренд_нижний_регистр"].isin(excluded_brands)].copy()
-
     if not df_excluded.empty:
         df_excluded["Артикул"] = df_excluded["ArtNumber"].apply(lambda art: f'goods_{art}')
         df_excluded = df_excluded[["Артикул", "Название", "Бренд", "art_url"]]
     else:
         df_excluded = pd.DataFrame(columns=["Артикул", "Название", "Бренд", "art_url"])
-
     df_filtered["Артикул"] = df_filtered["ArtNumber"].apply(lambda art: f'goods_{art}')
-    df_filtered['Цена для OZON'] = df_filtered['Цена Европы'].apply(transform_price)
+    df_filtered['Цена для OZON'] = df_filtered['Цена закупа'].apply(transform_price)
     df_filtered['Цена до скидки'] = df_filtered['Цена для OZON'].apply(lambda x: int(round(x * 1.3)))
     df_filtered["НДС"] = "Не облагается"
-
     desired_order = [
-        'Артикул', 'Название', 'Цена для OZON', 'Цена до скидки', 'НДС', 'Цена Европы',
+        'Артикул', 'Название', 'Цена для OZON', 'Цена до скидки', 'НДС', 'Цена закупа',
         'Вес', 'Ширина, мм', 'Высота, мм', 'Длина, мм', 'Ссылка на главное фото товара',
         'Ссылки на другие фото товара', 'Бренд', 'ArtNumber', 'Описание', 'Страна',
         'Характеристики', 'art_url'
     ]
     result_df = df_filtered[desired_order]
-
-    # --- Подготовка листа "Остатки" ---
     stocks_rows = []
-
     TARGET_STORE_1 = "г. Брянск, ул. Красноармейская, 93Б, ТЦ Профиль"
     TARGET_STORE_2 = "г. Брянск, ул. Советская, д. 99"
     SUM_COLUMN_NAME = "Красноармейская+Советская"
     REMOTE_WAREHOUSE_COLUMN_NAME = "Удаленный склад"
-
     LOCAL_STORES = {
-        TARGET_STORE_1,
-        TARGET_STORE_2,
-        "г. Брянск, ул. 3-го Интернационала, 13",
-        "Наличие на складе в Брянске"
+        TARGET_STORE_1, TARGET_STORE_2,
+        "г. Брянск, ул. 3-го Интернационала, 13", "Наличие на складе в Брянске"
     }
-
     for _, product in df_filtered.iterrows():
         current_stocks = product["raw_stocks"]
-
         stock_row = {
             "Артикул": product["Артикул"],
             "Название": product["Название"]
         }
-
         stock1 = parse_stock_value(current_stocks.get(TARGET_STORE_1, "0"))
         stock2 = parse_stock_value(current_stocks.get(TARGET_STORE_2, "0"))
         stock_row[SUM_COLUMN_NAME] = stock1 + stock2
@@ -206,7 +189,6 @@ def create_df_by_dict(data_dict):
 
         # Находим наименьшее значение, если удаленные склады есть, иначе 0
         stock_row[REMOTE_WAREHOUSE_COLUMN_NAME] = min(remote_stocks_list) if remote_stocks_list else 0
-
         stock_row["Наличие на складе в Брянске"] = parse_stock_value(
             current_stocks.get("Наличие на складе в Брянске", "0")
         )
@@ -215,68 +197,92 @@ def create_df_by_dict(data_dict):
         )
         stock_row[TARGET_STORE_1] = stock1
         stock_row[TARGET_STORE_2] = stock2
-
         stocks_rows.append(stock_row)
-
     df_stocks = pd.DataFrame(stocks_rows)
-
     final_stock_columns = [
         'Артикул', 'Название', SUM_COLUMN_NAME, 'Наличие на складе в Брянске',
         REMOTE_WAREHOUSE_COLUMN_NAME, 'г. Брянск, ул. 3-го Интернационала, 13',
         TARGET_STORE_1, TARGET_STORE_2
     ]
-
     if not df_stocks.empty:
         df_stocks = df_stocks[final_stock_columns]
     else:
         df_stocks = pd.DataFrame(columns=final_stock_columns)
-
     return result_df, df_excluded, df_stocks
 
 
-def create_xls(df_res, df_excluded, df_stocks, file_name):
+# ИЗМЕНЕНИЕ: Функция теперь принимает 5 DataFrame'ов
+def create_xls(df_ozon, df_ozon_local, df_ozon_remote, df_excluded, df_stocks, file_name):
     """
-    Сохраняет DataFrame'ы в Excel-файл с тремя листами и форматированием.
+    Сохраняет DataFrame'ы в Excel-файл с пятью листами и форматированием.
     """
+
+    def auto_adjust_columns(worksheet, dataframe):
+        """Вспомогательная функция для авто-подбора ширины колонок."""
+        for i, column in enumerate(dataframe.columns, 1):
+            column_letter = get_column_letter(i)
+            # Находим максимальную длину значения в колонке
+            max_length = dataframe[column].astype(str).map(len).max()
+            # Учитываем длину заголовка
+            column_width = max(max_length, len(column)) + 2
+            # Ограничиваем максимальную ширину, чтобы не было слишком широко
+            worksheet.column_dimensions[column_letter].width = min(column_width, 60)
+        worksheet.freeze_panes = 'A2'
+
     with pd.ExcelWriter(file_name, engine='openpyxl') as writer:
-        # Лист "OZON"
-        if not df_res.empty:
-            df_res.to_excel(writer, sheet_name='OZON', index=False, na_rep='NaN')
-            worksheet_ozon = writer.sheets['OZON']
-            for i, column in enumerate(df_res.columns, 1):
-                column_letter = get_column_letter(i)
-                column_width = min(max(df_res[column].astype(str).map(len).max(), len(column)) + 2, 50)
-                worksheet_ozon.column_dimensions[column_letter].width = column_width
-            worksheet_ozon.freeze_panes = 'A2'
+        # Лист "OZON" (все товары)
+        if not df_ozon.empty:
+            df_ozon.to_excel(writer, sheet_name='OZON', index=False)
+            auto_adjust_columns(writer.sheets['OZON'], df_ozon)
+
+        # ИЗМЕНЕНИЕ: Лист "OZON_local"
+        if not df_ozon_local.empty:
+            df_ozon_local.to_excel(writer, sheet_name='OZON_local', index=False)
+            auto_adjust_columns(writer.sheets['OZON_local'], df_ozon_local)
+
+        # ИЗМЕНЕНИЕ: Лист "OZON_remote"
+        if not df_ozon_remote.empty:
+            df_ozon_remote.to_excel(writer, sheet_name='OZON_remote', index=False)
+            auto_adjust_columns(writer.sheets['OZON_remote'], df_ozon_remote)
 
         # Лист "Остатки"
         if not df_stocks.empty:
-            df_stocks.to_excel(writer, sheet_name='Остатки', index=False, na_rep='NaN')
-            worksheet_stocks = writer.sheets['Остатки']
-            for i, column in enumerate(df_stocks.columns, 1):
-                column_letter = get_column_letter(i)
-                # Для длинного названия суммарного столбца делаем исключение
-                if column == "Красноармейская+Советская":
-                    column_width = 30
-                else:
-                    column_width = min(max(df_stocks[column].astype(str).map(len).max(), len(column)) + 2, 40)
-                worksheet_stocks.column_dimensions[column_letter].width = column_width
-            worksheet_stocks.freeze_panes = 'A2'
+            df_stocks.to_excel(writer, sheet_name='Остатки', index=False)
+            auto_adjust_columns(writer.sheets['Остатки'], df_stocks)
 
         # Лист "Нежелательный бренд"
         if not df_excluded.empty:
-            df_excluded.to_excel(writer, sheet_name='Нежелательный бренд', index=False, na_rep='NaN')
-            worksheet_excluded = writer.sheets['Нежелательный бренд']
-            for i, column in enumerate(df_excluded.columns, 1):
-                column_letter = get_column_letter(i)
-                column_width = min(max(df_excluded[column].astype(str).map(len).max(), len(column)) + 2, 50)
-                worksheet_excluded.column_dimensions[column_letter].width = column_width
-            worksheet_excluded.freeze_panes = 'A2'
+            df_excluded.to_excel(writer, sheet_name='Нежелательный бренд', index=False)
+            auto_adjust_columns(writer.sheets['Нежелательный бренд'], df_excluded)
 
 
 if __name__ == '__main__':
     data_json = read_json()
     if data_json:
-        df_res, df_excluded, df_stocks = create_df_by_dict(data_dict=data_json)
-        create_xls(df_res, df_excluded, df_stocks, file_name=RESULT_FILE_NAME)
-        print(f"Excel-файл '{RESULT_FILE_NAME}' успешно создан.")
+        # Получаем наши три основных DataFrame'а
+        df_res_main, df_excluded, df_stocks = create_df_by_dict(data_dict=data_json)
+
+        # ====================================================================
+        # ИЗМЕНЕНИЕ: Логика разделения основного DataFrame'а на два новых
+        # ====================================================================
+        if not df_stocks.empty and not df_res_main.empty:
+            # 1. Получаем список артикулов, у которых есть остатки в локальных магазинах
+            local_stock_articles = df_stocks[df_stocks["Красноармейская+Советская"] > 0]['Артикул'].unique()
+
+            # 2. Фильтруем основной DataFrame по этому списку
+            df_ozon_local = df_res_main[df_res_main['Артикул'].isin(local_stock_articles)]
+
+            # 3. Создаем второй DataFrame, инвертируя условие
+            df_ozon_remote = df_res_main[~df_res_main['Артикул'].isin(local_stock_articles)]
+
+            print(
+                f"Товары разделены: {len(df_ozon_local)} с локальными остатками, {len(df_ozon_remote)} только с удаленными.")
+        else:
+            # Если данных нет, создаем пустые DataFrame'ы, чтобы избежать ошибок
+            df_ozon_local = pd.DataFrame(columns=df_res_main.columns)
+            df_ozon_remote = pd.DataFrame(columns=df_res_main.columns)
+
+        # Передаем все 5 DataFrame'ов в функцию сохранения
+        create_xls(df_res_main, df_ozon_local, df_ozon_remote, df_excluded, df_stocks, file_name=RESULT_FILE_NAME)
+
+        print(f"Excel-файл '{RESULT_FILE_NAME}' успешно создан/обновлен.")
