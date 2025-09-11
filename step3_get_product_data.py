@@ -1,7 +1,8 @@
 """
-Шаг 3. Сбор детальной информации о товарах (версия "Марафонец").
+Шаг 3. Сбор детальной информации о товарах (финальная версия с обработкой 404).
 - Устойчив к падениям браузера.
 - Периодически перезапускает браузер для предотвращения утечек памяти.
+- Корректно обрабатывает несуществующие страницы (404).
 - В случае сбоя ждет 5 минут и пытается продолжить.
 """
 import os
@@ -38,16 +39,15 @@ BASE_URL = "https://www.officemag.ru"
 HEADLESS_MODE = False
 TIMEOUT = 45000
 MAX_RETRIES = 2
-PAUSE_BETWEEN_REQUESTS = (2, 6)  # Немного увеличим паузу
-RESTART_BROWSER_EVERY_N_URLS = 150  # <<< Перезапускать браузер каждые 150 ссылок
-CRASH_RECOVERY_WAIT_SECONDS = 300  # <<< Ждать 5 минут после падения
+PAUSE_BETWEEN_REQUESTS = (2, 6)
+RESTART_BROWSER_EVERY_N_URLS = 350
+CRASH_RECOVERY_WAIT_SECONDS = 300
 
 
-# --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ (без изменений, кроме send_logs...) ---
+# --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ (без изменений) ---
 def send_logs_to_telegram(message: str):
-    # Твой код для отправки в Telegram
-    BOT_TOKEN = '6456958617:AAEhKxpvbWxeDoq7IPf7fQo0sxbQ_LqSVz0'  # Временно для примера
-    CHAT_ID = '128592002'  # Временно для примера
+    BOT_TOKEN = '6456958617:AAEhKxpvbWxeDoq7IPf7fQo0sxbQ_LqSVz0'
+    CHAT_ID = '128592002'
     if not BOT_TOKEN or not CHAT_ID:
         print(Fore.YELLOW + "ПРЕДУПРЕЖДЕНИЕ: BOT_TOKEN или CHAT_ID не заданы. Уведомление не отправлено.")
         return
@@ -63,7 +63,6 @@ def send_logs_to_telegram(message: str):
         print(Fore.RED + f"Критическая ошибка при отправке в Telegram: {e}")
 
 
-# ... (остальные вспомогательные функции оставляем как есть) ...
 def save_debug_info(page: Page, article_id: str):
     print(Fore.MAGENTA + f"!!! Сохраняю отладочную информацию для артикула {article_id}...")
     os.makedirs(DEBUG_DIR, exist_ok=True)
@@ -193,7 +192,7 @@ def parse_product_page(page: Page) -> dict:
             "article_from_page": article, "code": item_id}
 
 
-# --- ГЛАВНАЯ ФУНКЦИЯ С ЛОГИКОЙ ПЕРЕЗАПУСКА ---
+# --- ГЛАВНАЯ ФУНКЦИЯ ---
 def main():
     init(autoreset=True)
     start_time = datetime.datetime.now()
@@ -202,13 +201,8 @@ def main():
     # send_logs_to_telegram(start_message)
 
     try:
-        # --- Блок подготовки ---
         urls_to_parse = read_simple_urls(INPUT_URL_FILE)
         all_data = load_existing_data(OUTPUT_JSON_FILE)
-
-        # ====================================================================
-        # ИЗМЕНЕНИЕ №1: Запоминаем, сколько товаров было ДО начала работы
-        # ====================================================================
         initial_data_count = len(all_data)
 
         def get_article_from_url(url: str) -> str | None:
@@ -226,11 +220,8 @@ def main():
 
         print(f"К обработке {Fore.CYAN}{len(urls_to_process)}{Style.RESET_ALL} новых ссылок.")
 
-        # --- Основной цикл работы ---
         with sync_playwright() as p:
-            browser = None
-            context = None
-            page = None
+            browser, context, page = None, None, None
 
             def launch_browser():
                 nonlocal browser, context, page
@@ -257,18 +248,31 @@ def main():
                     print(Fore.CYAN + f"\nОбработано {i} ссылок. Плановый перезапуск браузера...")
                     launch_browser()
 
-                product_data = None
                 article_id_from_url = get_article_from_url(url)
                 if not article_id_from_url:
                     log_failed_url(url, "Некорректный URL", OUTPUT_FAILED_FILE)
                     continue
 
+                product_data = None
                 for attempt in range(MAX_RETRIES):
                     try:
                         page.goto(url, wait_until="domcontentloaded")
+
+                        # ====================================================================
+                        # ИЗМЕНЕНИЕ: Проверяем на 404 страницу ПЕРЕД парсингом
+                        # ====================================================================
+                        not_found_locator = page.locator(".Blank__header:has-text('Страница не найдена')")
+                        if not_found_locator.count() > 0:
+                            print(Fore.YELLOW + f"  - Страница не найдена (404). Пропускаю.")
+                            log_failed_url(url, "Страница не найдена (404)", OUTPUT_FAILED_FILE)
+                            # Устанавливаем product_data в специальное значение, чтобы не было повторных попыток
+                            product_data = "SKIP"
+                            break
+
                         page.evaluate(
                             "() => { const chat = document.querySelector('.online-chat-root-TalkMe'); if (chat) chat.remove(); }")
                         product_data = parse_product_page(page)
+
                         if product_data:
                             break
                     except Exception as e:
@@ -290,26 +294,21 @@ def main():
                             print(Style.DIM + "  -> Пауза перед следующей попыткой...")
                             time.sleep(10)
 
-                if product_data:
+                if product_data and product_data != "SKIP":
                     all_data[article_id_from_url] = product_data
                     save_json_data(all_data, OUTPUT_JSON_FILE)
-                else:
+                elif product_data is None:  # Только если все попытки провалились
                     print(Fore.RED + Style.BRIGHT + f"!!! НЕ УДАЛОСЬ обработать {url} после {MAX_RETRIES} попыток.")
                     if not any(url in line for line in
                                (open(OUTPUT_FAILED_FILE).readlines() if os.path.exists(OUTPUT_FAILED_FILE) else [])):
-                        log_failed_url(url, "Не удалось загрузить или спарсить после всех попыток", OUTPUT_FAILED_FILE)
+                        log_failed_url(url, "Не удалось загрузить или спарсить", OUTPUT_FAILED_FILE)
 
                 time.sleep(random.uniform(*PAUSE_BETWEEN_REQUESTS))
 
             browser.close()
 
-        # --- Финальный блок ---
         end_time = datetime.datetime.now()
         duration = end_time - start_time
-
-        # ====================================================================
-        # ИЗМЕНЕНИЕ №2: Простой и надежный подсчет новых товаров
-        # ====================================================================
         newly_added_count = len(all_data) - initial_data_count
 
         finish_message = (
