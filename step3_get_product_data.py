@@ -1,9 +1,9 @@
 """
-Шаг 3. Сбор детальной информации о товарах (финальная версия с обработкой 404).
+Шаг 3. Сбор детальной информации о товарах (финальная версия с полной проверкой).
 - Устойчив к падениям браузера.
 - Периодически перезапускает браузер для предотвращения утечек памяти.
 - Корректно обрабатывает несуществующие страницы (404).
-- В случае сбоя ждет 5 минут и пытается продолжить.
+- При перезапуске пропускает как успешно собранные товары, так и ранее проваленные.
 """
 import os
 import time
@@ -44,7 +44,7 @@ RESTART_BROWSER_EVERY_N_URLS = 350
 CRASH_RECOVERY_WAIT_SECONDS = 300
 
 
-# --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ (без изменений) ---
+# --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
 def send_logs_to_telegram(message: str):
     BOT_TOKEN = '6456958617:AAEhKxpvbWxeDoq7IPf7fQo0sxbQ_LqSVz0'
     CHAT_ID = '128592002'
@@ -90,8 +90,20 @@ def read_simple_urls(filepath: str) -> list[str]:
     return unique_urls
 
 
+def get_article_from_url(url: str) -> str | None:
+    match = re.search(r'/goods/(\d+)', url)
+    if match:
+        return f"goods_{match.group(1)}"
+    return None
+
+
+# ====================================================================
+# ИСПРАВЛЕНИЕ: Возвращаем на место функцию load_existing_data
+# ====================================================================
 def load_existing_data(filepath: str) -> dict:
-    if not os.path.exists(filepath): return {}
+    """Загружает ранее собранные данные из JSON-файла."""
+    if not os.path.exists(filepath):
+        return {}
     with open(filepath, 'r', encoding='utf-8') as f:
         try:
             data = json.load(f)
@@ -100,6 +112,33 @@ def load_existing_data(filepath: str) -> dict:
         except json.JSONDecodeError:
             print(Fore.YELLOW + f"ПРЕДУПРЕЖДЕНИЕ: JSON-файл {filepath} поврежден. Начинаем с нуля.")
             return {}
+
+
+def load_all_processed_articles(json_path: str, failed_path: str) -> set[str]:
+    processed_articles = set()
+    if os.path.exists(json_path):
+        with open(json_path, 'r', encoding='utf-8') as f:
+            try:
+                data = json.load(f)
+                processed_articles.update(data.keys())
+                print(f"Загружено {Fore.GREEN}{len(data)}{Style.RESET_ALL} успешно собранных товаров из JSON.")
+            except json.JSONDecodeError:
+                print(Fore.YELLOW + f"ПРЕДУПРЕЖДЕНИЕ: JSON-файл {json_path} поврежден.")
+    if os.path.exists(failed_path):
+        initial_count = len(processed_articles)
+        with open(failed_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                parts = line.strip().split('|')
+                if len(parts) > 1:
+                    url = parts[-1].strip()
+                    article_id = get_article_from_url(url)
+                    if article_id:
+                        processed_articles.add(article_id)
+        failed_count = len(processed_articles) - initial_count
+        if failed_count > 0:
+            print(f"Загружено {Fore.YELLOW}{failed_count}{Style.RESET_ALL} ранее проваленных товаров из лога ошибок.")
+    print(f"Итого, {Fore.CYAN}{len(processed_articles)}{Style.RESET_ALL} артикулов будут пропущены.")
+    return processed_articles
 
 
 def save_json_data(data: dict, filepath: str):
@@ -192,7 +231,6 @@ def parse_product_page(page: Page) -> dict:
             "article_from_page": article, "code": item_id}
 
 
-# --- ГЛАВНАЯ ФУНКЦИЯ ---
 def main():
     init(autoreset=True)
     start_time = datetime.datetime.now()
@@ -202,16 +240,14 @@ def main():
 
     try:
         urls_to_parse = read_simple_urls(INPUT_URL_FILE)
-        all_data = load_existing_data(OUTPUT_JSON_FILE)
+        processed_articles = load_all_processed_articles(OUTPUT_JSON_FILE, OUTPUT_FAILED_FILE)
+        all_data = load_existing_data(OUTPUT_JSON_FILE)  # Эта строка теперь корректна
         initial_data_count = len(all_data)
 
-        def get_article_from_url(url: str) -> str | None:
-            match = re.search(r'/goods/(\d+)', url)
-            if match: return f"goods_{match.group(1)}"
-            return None
-
-        urls_to_process = [url for url in urls_to_parse if
-                           (article := get_article_from_url(url)) and article not in all_data]
+        urls_to_process = [
+            url for url in urls_to_parse
+            if (article := get_article_from_url(url)) and article not in processed_articles
+        ]
 
         if not urls_to_process:
             print(Fore.YELLOW + "Все товары из списка уже обработаны. Завершение работы.")
@@ -258,14 +294,10 @@ def main():
                     try:
                         page.goto(url, wait_until="domcontentloaded")
 
-                        # ====================================================================
-                        # ИЗМЕНЕНИЕ: Проверяем на 404 страницу ПЕРЕД парсингом
-                        # ====================================================================
                         not_found_locator = page.locator(".Blank__header:has-text('Страница не найдена')")
                         if not_found_locator.count() > 0:
                             print(Fore.YELLOW + f"  - Страница не найдена (404). Пропускаю.")
                             log_failed_url(url, "Страница не найдена (404)", OUTPUT_FAILED_FILE)
-                            # Устанавливаем product_data в специальное значение, чтобы не было повторных попыток
                             product_data = "SKIP"
                             break
 
@@ -297,7 +329,7 @@ def main():
                 if product_data and product_data != "SKIP":
                     all_data[article_id_from_url] = product_data
                     save_json_data(all_data, OUTPUT_JSON_FILE)
-                elif product_data is None:  # Только если все попытки провалились
+                elif product_data is None:
                     print(Fore.RED + Style.BRIGHT + f"!!! НЕ УДАЛОСЬ обработать {url} после {MAX_RETRIES} попыток.")
                     if not any(url in line for line in
                                (open(OUTPUT_FAILED_FILE).readlines() if os.path.exists(OUTPUT_FAILED_FILE) else [])):
